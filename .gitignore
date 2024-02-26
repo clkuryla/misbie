@@ -1,3 +1,11 @@
+# Data too big
+data/
+TE_downloaded/
+
+# Irrelevant
+manuscripts/
+code_from_email/
+
 # History files
 .Rhistory
 .Rapp.history

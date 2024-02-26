@@ -1,0 +1,114 @@
+---
+title: "MiSBIE Exploratory Data Analysis"
+author: "Christine Lucille Kuryla"
+date: "2024-02-15"
+output:  
+  html_document:
+    toc: true
+    toc_float: true
+    toc_depth: 2
+    collapsed: true
+    smooth_scroll: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+
+library(rEDM)
+
+```
+
+# Data Dictionary 
+
+## FILES FROM PHYSIOLOGICAL SIGNALS		
+File types		
+_bp	Blood Pressure	Arterial blood pressure measured with finapress (finger)
+_rsp	Respiration	Respiratory rates and amplitudes measured with two chest bands (abdominal and thoracis) with signals averaged
+_rtimes	Heart Rate	Heart rate measured with 3-lead ECG, here each "r waves" is marked (all files manually checked), so the hear rate (beats per minutes) can be computed as the distance (in sec) between each wave divided by 60 (sec)
+.2.bi	Bad Intervals	Since the data sometimes contain noise or sections of the files with non-sinus rhythms that cannot be analyzed, there is a “bad interval” file for each period in the protocol in which such unanalyzable data occurred.  These “BI” files are in text format and each line contains the start and stop time of each unscorable interval within each period.  Analyses of data with bad intervals must exclude these portions of the files. 
+_eda	Electrodermal activity	EDA or skin conductance measured every 1msec from the left palm. DATA TO COME FROM ELLIE YAN.
+		
+		
+## VARIABLE DESCRIPTIONS		
+_bp	Name	Units
+pSec	Time of systole	seconds
+pVal	Pressure at systole	mmHg (milliliters of mercury)
+tSec	Time of diatole	seconds
+tVal	Pressure at diastole	mmHg (milliliters of mercury)
+		
+_rsp	Name	Units
+pSec	Time of peak inspiration	seconds
+pVal	Value at peak inspiration	mVolts (these should be in liters, will need to use calibration to convert)
+tSec	Time of peak expiration	seconds
+tVal	Value at peak expiration	mVolts (these should be in liters, will need to use calibration to convert)
+		
+_rtimes	Name	Units
+pSec	Time of each r wave	seconds
+
+## Periods (in order)	Description	Duration
+Base	Baseline, after 25 minutes of resting.	366 seconds
+Pre	First biological samples collected (saliva, blood, temp, affect) [-5min]	300 seconds
+Instruct	Instructions for TSST given by study coordinator	Variable duration (about 300 seconds)
+Prep Task	Speech preparation, no pen or paper	122-123 seconds
+Task	Public speech task (Trier social stress task - TSST)	183-184 seconds
+Post 5	Samples collected 5 minutes post-task	300 seconds
+Post 10	Samples collected 10 minutes post-task	300 seconds
+Post 20	Samples collected 20 minutes post-task	300 seconds
+Post 30	Samples collected 30 minutes post-task	300 seconds
+Post 60	Samples collected 60 minutes post-task	300 seconds
+Post 90	Samples collected 90 minutes post-task	300 seconds
+Post 120	Samples collected 120 minutes post-task	300 seconds
+DBT	Deep Breathing Task: Paced breathing - inhalation/exhalation	420 seconds
+ST	Sit Stand: Participants go from seated position to standing, remain standing	420 seconds
+SST	Sit Stand Test: Participants repeatedly sit and stand (squats) for 30 secs	420 seconds
+CP	Cold Pressor Task: Participants submerge one hand in ice bath for 90 secs	660 seconds
+
+
+# Load and Explore Data
+
+```{r load_data}
+
+data_hr <- read_csv("./data/data_from_email/hr_cleaned.csv")
+data_bp <- read_csv("./data/data_from_email/bp_cleaned.csv")
+data_rsp <- read_csv("./data/data_from_email/rsp_cleaned.csv")
+data_pt_cond <- read_csv("./data/data_from_email/patient condition.csv")
+
+
+length(unique(data_hr$id)) # 71
+length(unique(data_rsp$id)) #53
+length(unique(data_bp$id)) # 68
+
+subj_hr <- unique(data_hr$id)
+subj_rsp <- unique(data_rsp$id)
+subj_bp <- unique(data_bp$id)
+
+length(intersect(subj_hr, subj_bp))
+length(intersect(subj_hr, subj_rsp))
+length(intersect(subj_bp, subj_rsp))
+
+length(intersect(intersect(subj_hr, subj_bp), subj_rsp))
+
+# Heart Rate
+colnames(data_hr)
+table(data_hr$period)
+table(data_hr$id)
+table(data_hr$condition)
+
+data_hr %>% 
+  ggplot(aes(x = time, y = rate, color = id)) +
+  geom_line()
+
+data_hr %>% 
+  filter(rate < 1000) %>% 
+  filter(period == 1) %>% 
+  ggplot(aes(x = time, y = rate, color = id)) +
+ # geom_point() +
+  geom_line() +
+  theme(legend.position = "none") +
+  labs(title = "Heart Rate over Time, Period 1")
+
+
+```
+
