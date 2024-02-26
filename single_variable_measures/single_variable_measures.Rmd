@@ -7,6 +7,9 @@ output: html_document
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+
 ```
 
 # Introduction
@@ -30,4 +33,97 @@ This Rmd will explore various complexity measures from single variables (heart r
 
 
 
+
+
+
+# Load and process data
+
+```{r load_data}
+
+# For now, we will focus on heart rate.
+
+hr_cleaned <- read_csv("./data/data_from_email/hr_cleaned.csv")
+#bp_cleaned <- read_csv("./data/data_from_email/bp_cleaned.csv")
+#rsp_cleaned <- read_csv("./data/data_from_email/rsp_cleaned.csv")
+#pt_cond_cleaned <- read_csv("./data/data_from_email/patient condition.csv")
+
+# Sample size
+length(unique(hr_cleaned))
+length(unique(bp_cleaned))
+length(unique(rsp_cleaned))
+
+hr_cleaned %>%
+  group_by(condition) %>%
+  summarise(UniqueSubjects = n_distinct(id)) 
+
+# Clean up the data and add column for time between beats
+hr_cleaned_final <- hr_cleaned %>% 
+  filter(condition %in% c("Control", "Deletion", "Mutation")) %>% 
+  mutate(rate = ifelse(rate > 150 | rate < 25, NA, rate)) %>% #Replace with NA if HR is > 150 or < 25 
+  mutate(delta_t  = pSec - lag(pSec)) %>% 
+  mutate(delta_t = ifelse(delta_t > 5 | delta_t < -5, NA, delta_t)) # get rid of the first data point (lag) and the unreasonable data points
+  
+
+hr_df <- hr_cleaned_final
+
+rm(hr_cleaned_final)
+
+# for future use
+id_cond_df <- hr_df %>% 
+  select(id, condition) %>% 
+  unique()
+
+```
+
+# Heart Rate
+
+## SD (just for fun)
+
+```{r hr_sd, eval = FALSE}
+
+
+
+clk_fctn <- function(data){
+  
+  m <- mean(data)
+  
+  return(m)
+}
+
+# Just for one
+
+hr_summary <- hr_df %>% 
+  group_by(id, period) %>% 
+  na.omit() %>% 
+  summarize(hr_dt_sd = sd(delta_t),
+            hr_dt_mean = mean(delta_t)) %>% 
+  ungroup() %>% 
+  left_join(id_cond_df, by = "id") %>% 
+  mutate(condition = as.factor(condition))
+
+hist(hr_summary$hr_dt_sd)
+hist(hr_summary$hr_dt_mean)
+
+
+# t-test for hr delta t sd
+t.test(data = hr_summary %>% filter(condition == "Control" | condition == "Mutation"), hr_dt_sd ~ condition)
+t.test(data = hr_summary %>% filter(condition == "Control" | condition == "Deletion"), hr_dt_sd ~ condition)
+t.test(data = hr_summary %>% filter(condition == "Mutation" | condition == "Deletion"), hr_dt_sd ~ condition)
+
+# t-test for hr delta t mean
+t.test(data = hr_summary %>% filter(condition == "Control" | condition == "Mutation"), hr_dt_mean ~ condition)
+t.test(data = hr_summary %>% filter(condition == "Control" | condition == "Deletion"), hr_dt_mean ~ condition)
+t.test(data = hr_summary %>% filter(condition == "Mutation" | condition == "Deletion"), hr_dt_mean ~ condition)
+
+```
+
+
+## https://cran.r-project.org/web/packages/fractalRegression/fractalRegression.pdf 
+
+## Multiscale Entropy (MSE)
+
+```{r}
+
+
+```
 
