@@ -1,0 +1,33 @@
+---
+title: "Single Variable Measures"
+author: "Christine Lucille Kuryla"
+date: "2024-02-22"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Introduction
+
+## MiSBIE Data Background
+
+See "misbie_explore.Rmd" for more details about the variables and some EDA. 
+
+*tl;dr:* There are three groups: healthy, mutation, and deletion. The mutation and deletion groups are subjects with genetic mitochondrial abnormalities. Continuous heart rate, respiration rate, and blood pressure measures were recorded for 71 subjects over several tasks and recovery periods.
+
+Note the raw data allows for HR and RR to be analyzed independent of rate because the raw data is each systole/diastole beat and each inspiration/expiration, respectively. Rate can be calculated per interval or may be interpolated. 
+
+## Objective
+
+This Rmd will explore various complexity measures from single variables (heart rate, blood pressure, or respiration rate) over time. 
+
+
+
+
+
+
+
+
+
