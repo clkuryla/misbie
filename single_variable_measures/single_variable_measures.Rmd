@@ -81,28 +81,35 @@ id_cond_df <- hr_df %>%
 
 ```{r hr_sd, eval = FALSE}
 
-
-
-clk_fctn <- function(data){
-  
-  m <- mean(data)
-  
-  return(m)
+rmssd <- function(data_delta_t){
+  sq <- data_delta_t^2
+  avgofsq <- mean(sq)
+  rmssd <- sqrt(avgofsq)
+  return(rmssd)
 }
+
+#test_rmssd <- function(data){
+  # need to be in ms?
+#  delta_t_squared <- data %>% mutate(delta_t_squared = (delta_t)^2)
+#  avg_of_squared <- delta_t_squared %>% na.omit() %>% group_by(id, period) %>% summarize(mean_of_sq_dt = mean(delta_t_squared))
+#  rmssd <- sqrt(mean_of_sq_dt)
+#}
 
 # Just for one
 
 hr_summary <- hr_df %>% 
   group_by(id, period) %>% 
   na.omit() %>% 
-  summarize(hr_dt_sd = sd(delta_t),
-            hr_dt_mean = mean(delta_t)) %>% 
+  summarize(hr_dt_mean = mean(delta_t),
+            hr_dt_sd = sd(delta_t),
+            hr_rmssd = rmssd(delta_t)) %>% 
   ungroup() %>% 
   left_join(id_cond_df, by = "id") %>% 
   mutate(condition = as.factor(condition))
 
 hist(hr_summary$hr_dt_sd)
 hist(hr_summary$hr_dt_mean)
+hist(hr_summary$hr_rmssd)
 
 
 # t-test for hr delta t sd
@@ -114,6 +121,11 @@ t.test(data = hr_summary %>% filter(condition == "Mutation" | condition == "Dele
 t.test(data = hr_summary %>% filter(condition == "Control" | condition == "Mutation"), hr_dt_mean ~ condition)
 t.test(data = hr_summary %>% filter(condition == "Control" | condition == "Deletion"), hr_dt_mean ~ condition)
 t.test(data = hr_summary %>% filter(condition == "Mutation" | condition == "Deletion"), hr_dt_mean ~ condition)
+
+# t-test for hr rmssd
+t.test(data = hr_summary %>% filter(condition == "Control" | condition == "Mutation"), hr_rmssd ~ condition)
+t.test(data = hr_summary %>% filter(condition == "Control" | condition == "Deletion"), hr_rmssd ~ condition)
+t.test(data = hr_summary %>% filter(condition == "Mutation" | condition == "Deletion"), hr_rmssd ~ condition)
 
 ```
 
