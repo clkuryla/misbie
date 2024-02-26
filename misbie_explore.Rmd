@@ -69,7 +69,6 @@ CP	Cold Pressor Task: Participants submerge one hand in ice bath for 90 secs	660
 # Load and Explore Data
 
 ```{r load_data}
-
 data_hr <- read_csv("./data/data_from_email/hr_cleaned.csv")
 data_bp <- read_csv("./data/data_from_email/bp_cleaned.csv")
 data_rsp <- read_csv("./data/data_from_email/rsp_cleaned.csv")
@@ -88,8 +87,36 @@ length(intersect(subj_hr, subj_bp))
 length(intersect(subj_hr, subj_rsp))
 length(intersect(subj_bp, subj_rsp))
 
+
+# Number of subjects in all three
 length(intersect(intersect(subj_hr, subj_bp), subj_rsp))
 
+# Grouped by condition 
+
+data_hr %>%
+  group_by(condition) %>%
+  summarise(UniqueSubjects = n_distinct(id)) 
+
+data_bp %>%
+  group_by(condition) %>%
+  summarise(UniqueSubjects = n_distinct(id)) 
+
+data_rsp %>%
+  group_by(condition) %>%
+  summarise(UniqueSubjects = n_distinct(id))
+
+data_pt_cond %>%
+  mutate(pi_geneticdiagnosistype = as.factor(pi_geneticdiagnosistype)) %>% 
+  group_by(pi_geneticdiagnosistype) %>%
+  summarise(UniqueSubjects = n_distinct(id))
+
+table(data_pt_cond[2:102,]$pi_geneticdiagnosistype)
+
+```
+
+
+
+```{r heart_rate}
 # Heart Rate
 colnames(data_hr)
 table(data_hr$period)
