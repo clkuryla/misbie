@@ -16,7 +16,7 @@ knitr::opts_chunk$set(echo = TRUE)
 
 library(tidyverse)
 
-library(rEDM)
+
 
 ```
 
@@ -72,51 +72,79 @@ CP	Cold Pressor Task: Participants submerge one hand in ice bath for 90 secs	660
 data_hr <- read_csv("./data/data_from_email/hr_cleaned.csv")
 data_bp <- read_csv("./data/data_from_email/bp_cleaned.csv")
 data_rsp <- read_csv("./data/data_from_email/rsp_cleaned.csv")
-data_pt_cond <- read_csv("./data/data_from_email/patient condition.csv")
+data_pt_cond <- read_csv("./data/data_from_email/patient condition.csv") %>% 
+  mutate(id = tolower(subject_id))
+```
 
 
+```{r sample_size}
+
+# Number of subjects in each measure
 length(unique(data_hr$id)) # 71
 length(unique(data_rsp$id)) #53
 length(unique(data_bp$id)) # 68
+length(unique(data_pt_cond$id)) #125
 
+
+# Number of subjects in intersections
 subj_hr <- unique(data_hr$id)
 subj_rsp <- unique(data_rsp$id)
 subj_bp <- unique(data_bp$id)
+subj_pt_cond <- unique(data_pt_cond$id)
 
 length(intersect(subj_hr, subj_bp))
 length(intersect(subj_hr, subj_rsp))
 length(intersect(subj_bp, subj_rsp))
+length(intersect(subj_hr, subj_pt_cond))
 
+# Number of subjects in all three measures
+length(intersect(intersect(subj_hr, subj_bp), subj_rsp)) #52
 
-# Number of subjects in all three
-length(intersect(intersect(subj_hr, subj_bp), subj_rsp))
+# Number of subjects with all three measures and metadata #52 also
+length(intersect(intersect(subj_hr, subj_bp), intersect(subj_rsp, subj_pt_cond)))
 
 # Grouped by condition 
 
 data_hr %>%
   group_by(condition) %>%
-  summarise(UniqueSubjects = n_distinct(id)) 
+  summarise(n_subjects = n_distinct(id)) 
 
 data_bp %>%
   group_by(condition) %>%
-  summarise(UniqueSubjects = n_distinct(id)) 
+  summarise(n_subjects = n_distinct(id)) 
 
 data_rsp %>%
   group_by(condition) %>%
-  summarise(UniqueSubjects = n_distinct(id))
+  summarise(n_subjects = n_distinct(id))
 
+# same but from REDCap patient data file
 data_pt_cond %>%
-  mutate(pi_geneticdiagnosistype = as.factor(pi_geneticdiagnosistype)) %>% 
+#  mutate(pi_geneticdiagnosistype = as.factor(pi_geneticdiagnosistype)) %>% 
   group_by(pi_geneticdiagnosistype) %>%
-  summarise(UniqueSubjects = n_distinct(id))
+  summarise(n_subjects = n_distinct(subject_id))
 
-table(data_pt_cond[2:102,]$pi_geneticdiagnosistype)
+# Summary of REDCap patient diagnoses
+table(data_pt_cond[1:97,]$pi_geneticdiagnosistype)
+
+###### Combine HR and pt data from redcap
+
+data_hr_redcap <- left_join(data_hr, data_pt_cond, by = "id")
+
+data_hr_redcap %>%
+  group_by(pi_geneticdiagnosistype) %>%
+  summarise(n_subjects = n_distinct(id))
+
+data_hr_redcap %>%
+  group_by(condition) %>%
+  summarise(n_subjects = n_distinct(id))
+
+
 
 ```
 
 
 
-```{r heart_rate}
+```{r heart_rate, eval = FALSE, include = FALSE}
 # Heart Rate
 colnames(data_hr)
 table(data_hr$period)
