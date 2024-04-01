@@ -22,10 +22,10 @@ library(rEDM)
 
 ```{r}
 
-hr_cleaned <- read_csv("./data/data_from_email/hr_cleaned.csv")
-bp_cleaned <- read_csv("./data/data_from_email/bp_cleaned.csv")
-rsp_cleaned <- read_csv("./data/data_from_email/rsp_cleaned.csv")
-pt_cond_cleaned <- read_csv("./data/data_from_email/patient condition.csv")
+# hr_cleaned <- read_csv("./data/data_from_email/hr_cleaned.csv")
+# bp_cleaned <- read_csv("./data/data_from_email/bp_cleaned.csv")
+# rsp_cleaned <- read_csv("./data/data_from_email/rsp_cleaned.csv")
+# pt_cond_cleaned <- read_csv("./data/data_from_email/patient condition.csv")
 
 ```
 
@@ -47,20 +47,20 @@ HRVData$Beat
 ```{r}
 
 # Create empty HRVData structure
-hrv.data = CreateHRVData()
-hrv.data = SetVerbose(hrv.data, TRUE )
-
-hrv.data = LoadBeatAscii(hrv.data, "example.beats",
-                         RecordPath = "beatsFolder")
-
-
-
-hrv.data.1 = CreateHRVData()
-hrv.data.1 = SetVerbose(hrv.data, TRUE )
-hrv.data.1 <- LoadBeatAscii(hrv.data.1, psec_hr)
-
-
-hrv.data <- LoadBeatAscii(hrv.data, psec_hr_10_mi001)
+# hrv.data = CreateHRVData()
+# hrv.data = SetVerbose(hrv.data, TRUE )
+# 
+# hrv.data = LoadBeatAscii(hrv.data, "example.beats",
+#                          RecordPath = "beatsFolder")
+# 
+# 
+# 
+# hrv.data.1 = CreateHRVData()
+# hrv.data.1 = SetVerbose(hrv.data, TRUE )
+# hrv.data.1 <- LoadBeatAscii(hrv.data.1, psec_hr)
+# 
+# 
+# hrv.data <- LoadBeatAscii(hrv.data, psec_hr_10_mi001)
 
 
 ```
@@ -139,8 +139,11 @@ hrv.data$TimeAnalysis[[1]]$HRVi
 ```
 
 ```{r}
+rhrv_ts_function 
 
-rhrv_function <- function(time_series_data){    #, id, condition){
+rhrv_function <- function(time_series_data, freqhr, int_method){    #, id, condition){
+  
+  #library(RHRV)
   
   # create hrv object and load time series data
   
@@ -158,8 +161,10 @@ hrv.data = FilterNIHR(hrv.data)
 # In order to be able to perform spectral analysis in the frequency domain, a uniformly sampled HR series is required. It may be constructed from the niHR series by using the InterpolateNIHR function, which uses linear (default) or spline interpolation. The frequency of interpolation may be specified. 4 Hz (the default value) is enough for most applications.
 
 # note default is linear (maybe try spline), freqhr is recommended to be 4 Hz
+# InterpolateNIHR(HRVData, freqhr = 4, method = c("linear", "spline"), verbose=NULL)
 
-hrv.data = InterpolateNIHR(hrv.data, freqhr = 4)
+
+hrv.data = InterpolateNIHR(hrv.data, freqhr = freqhr, method = int_method)
 
 # plot HR
 #PlotNIHR(hrv.data, main = "niHR")
@@ -168,7 +173,8 @@ hrv.data = InterpolateNIHR(hrv.data, freqhr = 4)
 
 # The normal window is 300 sec, but that's our total, so I'll do 100
 hrv.data = CreateTimeAnalysis(hrv.data, size = 50,
-        interval = 7.8125) # numofbins maybe use 
+                          #    numofbins = 100)
+                              interval = 7.8125) # numofbins maybe use 
 
 SDNN <- hrv.data$TimeAnalysis[[1]]$SDNN
 SDANN <- hrv.data$TimeAnalysis[[1]]$SDANN
@@ -195,20 +201,21 @@ return(c(SDNN = SDNN,
 
 }
 
-rhrv_function(rsp_cleaned %>% filter(id == "mi002") %>%  filter(period == 10) %>% pull(pSec))
+rhrv_function(hr_cleaned %>% filter(id == "mi002") %>%  filter(period == 10) %>% pull(pSec),
+              int_method = "spline", freqhr = 4)
 
-hr_rhrv_summary <- hr_cleaned %>% 
+hr_rhrv_summary <- hr_cleaned %>% filter(period != "Acquisition") %>% filter(period != "C3") %>% filter(period != "Preptask") %>% 
   group_by(id, period) %>% 
-  summarize(hr_SDNN = rhrv_function(pSec)["SDNN"],
-            hr_SDANN = rhrv_function(pSec)["SDANN"],
-            hr_SDNNIDX = rhrv_function(pSec)["SDNNIDX"],
-            hr_pNN50 = rhrv_function(pSec)["pNN50"],
-            hr_SDSD = rhrv_function(pSec)["SDSD"],
-            hr_rMSSD = rhrv_function(pSec)["rMSSD"],
-            hr_IRRR = rhrv_function(pSec)["IRRR"],
-            hr_MADRR = rhrv_function(pSec)["MADRR"],
-            hr_TINN = rhrv_function(pSec)["TINN"],
-            hr_HRVi = rhrv_function(pSec)["HRVi"]
+  summarize(hr_SDNN = rhrv_function(pSec, int_method = "spline", freqhr = 4)["SDNN"],
+            hr_SDANN = rhrv_function(pSec, int_method = "spline", freqhr = 4)["SDANN"],
+            hr_SDNNIDX = rhrv_function(pSec, int_method = "spline", freqhr = 4)["SDNNIDX"],
+            hr_pNN50 = rhrv_function(pSec, int_method = "spline", freqhr = 4)["pNN50"],
+            hr_SDSD = rhrv_function(pSec, int_method = "spline", freqhr = 4)["SDSD"],
+            hr_rMSSD = rhrv_function(pSec, int_method = "spline", freqhr = 4)["rMSSD"],
+            hr_IRRR = rhrv_function(pSec, int_method = "spline", freqhr = 4)["IRRR"],
+            hr_MADRR = rhrv_function(pSec, int_method = "spline", freqhr = 4)["MADRR"],
+            hr_TINN = rhrv_function(pSec, int_method = "spline", freqhr = 4)["TINN"],
+            hr_HRVi = rhrv_function(pSec, int_method = "spline", freqhr = 4)["HRVi"]
             ) %>% 
   left_join(id_to_group) %>% 
   select(id, period, condition, everything())
@@ -233,6 +240,33 @@ rsp_rhrv_summary <- rsp_cleaned %>%
   
 #write_csv(hr_rhrv_summary, "/Users/christinekuryla/Documents/A_Columbia_Research/MiSBIE/misbie/data/results/hr_rhrv_summary_20240319.csv")
 
+t.test(hr_HRVi ~ condition, hr_rhrv_summary %>% filter(condition %in% c("Control", "Deletion")))
+wilcox.test(hr_HRVi ~ condition, hr_rhrv_summary %>% filter(condition %in% c("Control", "Deletion")))
+
+wilcox.test(hr_pNN50 ~ condition, hr_rhrv_summary %>% filter(condition %in% c("Control", "Mutation")))
+
+library(pheatmap)
+pheatmap(cor(hr_rhrv_summary %>% ungroup %>% filter(period %in% 6:12) %>% select(c(-"id", -"condition", -"period")) %>% select(-c(hr_SDANN, hr_SDNNIDX))), display_numbers = TRUE)
+
+library(pheatmap)
+pheatmap(cor(entropy_summary %>% ungroup %>% filter(period %in% 6:12) %>% select(c(-"id", -"condition", -"period")) ), display_numbers = TRUE)
 ```
 
-  
+
+# Correlation Heatmaps
+```{r corr_heatmaps}
+
+entropy_summary <- read_csv("/Users/christinekuryla/Documents/A_Columbia_Research/MiSBIE/misbie/data/results/entropy_summary20240319.csv")
+hr_rhrv_summary <- read_csv("/Users/christinekuryla/Documents/A_Columbia_Research/MiSBIE/misbie/data/results/hr_rhrv_summary_20240319.csv")
+te_summary <- read_csv("/Users/christinekuryla/Documents/A_Columbia_Research/MiSBIE/misbie/data/te_summary_1to12_20240329.csv")
+
+combined_summary <- right_join(hr_rhrv_summary %>% filter(period %in% 6:12), entropy_summary %>% filter(period %in% 6:12), by = c("id", "condition", "period"))
+combined_summary_singlevar <- combined_summary
+
+combined_summary_6to12all <- right_join(combined_summary %>% filter(period %in% 6:12), te_summary %>% filter(period %in% 6:12) %>% mutate(period = as.character(period)), by = c("id", "condition", "period"))
+
+combined_summary <- combined_summary_6to12all
+
+
+```
+
