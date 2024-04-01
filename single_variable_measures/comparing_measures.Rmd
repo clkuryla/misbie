@@ -1,0 +1,238 @@
+---
+title: "Comparing and Combining Metrics"
+author: "Christine Lucille Kuryla"
+date: "2024-03-31"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+# Load Data
+
+```{r}
+
+entropy_summary <- read_csv("/Users/christinekuryla/Documents/A_Columbia_Research/MiSBIE/misbie/data/results/entropy_summary20240319.csv") %>% 
+  select("id", "condition", "period", 
+         "hr_approx_entropy", "hr_sample_entropy",
+         "rsp_approx_entropy", "rsp_sample_entropy",
+         "bp_approx_entropy", "bp_sample_entropy")
+
+hr_rhrv_summary <- read_csv("/Users/christinekuryla/Documents/A_Columbia_Research/MiSBIE/misbie/data/results/hr_rhrv_summary_20240319.csv") %>% 
+  select("id", "condition", "period", 
+         "hr_SDANN",
+         "hr_MADRR", "hr_pNN50", "hr_SDSD", "hr_rMSSD",
+         "hr_TINN", "hr_HRVi",
+         "hr_SDNNIDX", "hr_SDNN", "hr_IRRR")
+
+te_summary <- read_csv("/Users/christinekuryla/Documents/A_Columbia_Research/MiSBIE/misbie/data/te_summary_1to12_20240329.csv")
+
+combined_summary <- right_join(hr_rhrv_summary %>% filter(period %in% 6:12), entropy_summary %>% filter(period %in% 6:12), by = c("id", "condition", "period"))
+combined_summary_singlevar <- combined_summary
+
+combined_summary_6to12all <- right_join(combined_summary %>% filter(period %in% 6:12), te_summary %>% filter(period %in% 6:12) %>% mutate(period = as.character(period)), by = c("id", "condition", "period"))
+
+combined_summary <- combined_summary_6to12all
+
+combined_summary_more <- left_join(combined_summary_6to12all, rsp_hr_dt_summary_612)
+
+combined_summary <- combined_summary_more
+
+```
+
+
+```{r summary_stats}
+
+combined_summary %>% 
+  group_by(condition) %>% 
+  summarize(n = n_distinct(id))
+
+```
+
+
+# Correlation Heatmaps
+
+```{r corr_heatmaps}
+# Heatmaps of the metrics 
+# All together and by group
+
+library(pheatmap)
+library(RColorBrewer)
+
+pheatmap(cor(combined_summary %>% ungroup %>% select(c(-"id", -"condition", -"period")) ), 
+         main = "All Subjects", 
+         cluster_rows = FALSE, cluster_cols = FALSE, display_numbers = TRUE,
+         color = colorRampPalette(rev(brewer.pal(n = 7, name = "RdYlBu")))(length(seq(-1, 1, by = .1))), breaks = seq(-1, 1, by = .1))
+
+pheatmap(cor(combined_summary %>% ungroup %>% filter(condition == "Control") %>% select(c(-"id", -"condition", -"period")) ),
+         main = "Control", 
+         cluster_rows = FALSE, cluster_cols = FALSE, display_numbers = TRUE,
+         color = colorRampPalette(rev(brewer.pal(n = 7, name = "RdYlBu")))(length(seq(-1, 1, by = .1))), breaks = seq(-1, 1, by = .1))
+
+pheatmap(cor(combined_summary %>% ungroup %>% filter(condition == "Mutation") %>% select(c(-"id", -"condition", -"period")) ), 
+         main = "Mutation",
+         cluster_rows = FALSE, cluster_cols = FALSE, display_numbers = TRUE,
+         color = colorRampPalette(rev(brewer.pal(n = 7, name = "RdYlBu")))(length(seq(-1, 1, by = .1))), breaks = seq(-1, 1, by = .1))
+
+pheatmap(cor(combined_summary %>% ungroup %>% filter(condition == "Deletion") %>% select(c(-"id", -"condition", -"period")) ), 
+         main = "Deletion",
+         cluster_rows = FALSE, cluster_cols = FALSE, display_numbers = TRUE,
+         color = colorRampPalette(rev(brewer.pal(n = 7, name = "RdYlBu")))(length(seq(-1, 1, by = .1))), breaks = seq(-1, 1, by = .1))
+
+library(PerformanceAnalytics)
+chart.Correlation(combined_summary %>% ungroup %>% select(c(-"id", -"condition", -"period")), histogram=TRUE, pch=19, title = "RHRV")
+
+library(corrplot)
+corrplot(cor(combined_summary %>% ungroup %>% #filter(condition == "Control") %>%  
+               select(c(-"id", -"condition", -"period"))), type = "upper", 
+         tl.col = "black", tl.srt = 45, 
+         main = "All Subjects")
+
+
+corr_all <- cor(combined_summary %>% ungroup %>% filter(condition == "Control") %>% select(c(-"id", -"condition", -"period")) )
+
+library(igraph)
+```
+
+# PCA
+
+```{r pca}
+pca_rhrv <- hr_rhrv_summary %>% select(-c(id, period, condition)) %>% ungroup() %>% na.omit()
+pca <- princomp(pca_rhrv, cor = TRUE)
+summary(pca)
+loadings(pca)
+
+
+
+
+```
+
+# Network Vizualization and Analysis
+
+```{r pca}
+
+summary_mat <- combined_summary_6to12all
+
+corr_all <- cor(summary_mat %>% ungroup %>% select(c(-"id", -"condition", -"period")) )
+corr_control <- cor(summary_mat %>% ungroup %>% filter(condition == "Control") %>% select(c(-"id", -"condition", -"period")) )
+corr_mutation <- cor(summary_mat %>% ungroup %>% filter(condition == "Mutation") %>% select(c(-"id", -"condition", -"period")) )
+corr_deletion <- cor(summary_mat %>% ungroup %>% filter(condition == "Deletion") %>% select(c(-"id", -"condition", -"period")) )
+
+g_all <- graph_from_adjacency_matrix(corr_all, mode = "undirected", weighted = TRUE, diag = FALSE)
+g_control <- graph_from_adjacency_matrix(corr_control, mode = "undirected", weighted = TRUE, diag = FALSE)
+g_mutation <- graph_from_adjacency_matrix(corr_mutation, mode = "undirected", weighted = TRUE, diag = FALSE)
+g_deletion <- graph_from_adjacency_matrix(corr_deletion, mode = "undirected", weighted = TRUE, diag = FALSE)
+
+g <- g_all # whichever is of interest
+
+library(igraph)
+library(RColorBrewer)
+
+# Assuming 'g' is your graph object from the previous steps
+# Define color gradients
+positive_colors <- colorRampPalette(c("white", "red"))(100)
+negative_colors <- colorRampPalette(c("blue", "white"))(100)
+
+# Function to get color based on correlation
+get_edge_color <- function(weight) {
+  if (weight > 0) {
+    positive_colors[max(1, ceiling(weight * 100))]
+  } else {
+    negative_colors[max(1, ceiling(abs(weight) * 100))]
+  }
+}
+
+# Apply colors to edges based on their weight (correlation)
+E(g)$color <- sapply(E(g)$weight, get_edge_color)
+
+# Plot the graph
+plot(g, 
+   #  layout = layout_nicely(g), 
+     vertex.label = V(g)$name, 
+     edge.width = 2,
+   #  edge.label = round(E(g)$weight, 2),
+     vertex.color = "lightblue",
+     vertex.size = 30,
+     vertex.frame.color = NA,  # Remove the border around nodes
+     main = "Graph of Correlation Matrix with Gradient Edges")
+
+```
+
+```{r}
+
+df <- as.data.frame(combined_summary %>% 
+                      filter(condition == "Mutation") %>% 
+                      filter(period == 10) %>% 
+                      ungroup %>% 
+                      select("hr_SDNN", "hr_pNN50", "hr_HRVi", "hr_IRRR", 
+                             "hr_approx_entropy", "hr_sample_entropy",
+                             "bp_approx_entropy", "bp_sample_entropy",
+                             "rsp_approx_entropy", "rsp_sample_entropy"
+                             ) #%>% 
+                    #  select(c(-"id", -"period", -"condition"))
+                      )
+
+# Assume 'df' is your data frame
+variables <- colnames(df)
+n <- ncol(df)
+
+# Initialize a matrix to store p-values
+p_matrix <- matrix(NA, n, n, dimnames = list(variables, variables))
+
+# Compute correlation and p-values
+for (i in 1:(n-1)) {
+  for (j in (i+1):n) {
+    test_result <- cor.test(df[[i]], df[[j]])
+    p_matrix[i, j] <- test_result$p.value
+    p_matrix[j, i] <- test_result$p.value
+  }
+}
+
+# Your existing correlation matrix
+corr_matrix <- cor(df)
+
+# Use p-value threshold to adjust correlation matrix for significant correlations only
+corr_matrix[is.na(p_matrix) | p_matrix >= 0.05] <- 0
+
+library(igraph)
+
+# Create the graph from the adjusted correlation matrix
+g <- graph_from_adjacency_matrix(corr_matrix, mode = "undirected", weighted = TRUE, diag = FALSE)
+E(g)$color <- sapply(E(g)$weight, get_edge_color)
+
+# Visualize the graph
+plot(g, 
+    # layout = layout_on_sphere(g), 
+     vertex.label = V(g)$name, 
+     edge.label = round(E(g)$weight, 2),
+     edge.width = abs(E(g)$weight) * 2,
+     vertex.color = "lightblue",
+     vertex.size = 20,
+     vertex.frame.color = NA,
+     main = "Graph of Significant Correlations (p < 0.05)")
+
+plot(g, 
+     layout = layout_nicely(g), 
+     vertex.label = V(g)$name, 
+     edge.width = 2,
+     edge.label = round(E(g)$weight, 2),
+     vertex.color = "lightblue",
+     vertex.size = 30,
+     vertex.frame.color = NA,  # Remove the border around nodes
+     main = "Graph of Correlation Matrix with Gradient Edges")
+
+
+```
+
+
+```{r}
+
+combined_summary %>% 
+  ggplot(aes(y = rsp_approx_entropy, x = rsp_t_rmssd, color = condition)) +
+  geom_smooth(method = lm) +
+  geom_point()
+
+```
+
