@@ -162,7 +162,8 @@ colnames(comb_df_1to12) == colnames(comb_df_tasks)
 
 comb_df <- rbind(comb_df_1to12, comb_df_tasks)
 
-comb_df_10 <- comb_df %>% filter(period == 1)
+comb_df_10 <- comb_df %>% filter(period == 10)
+comb_df_8 <- comb_df %>% filter(period == 8)
 
 table(comb_df$condition)
 
@@ -172,6 +173,7 @@ table(comb_df$condition)
 
 ```{r}
 entropy_summary <- read_csv("/Users/christinekuryla/Documents/A_Columbia_Research/MiSBIE/misbie/data/results/entropy_summary20240319.csv")
+hr_rhrv_summary <- read_csv("/Users/christinekuryla/Documents/A_Columbia_Research/MiSBIE/misbie/data/results/hr_rhrv_summary_20240319.csv")
 ```
 
 ```{r}
@@ -208,6 +210,8 @@ all_df = comb_df %>% arrange(id, period, interval)
 
 ```{r eda}
 colnames(comb_df)
+
+# HR, RR, BP vs time for all periods
 
 ggplotly(ggplot(comb_df, aes(x = interval, y = rate_hr, color = id)) +
   geom_line() +
@@ -261,9 +265,94 @@ metric_approx_entropy <- function(data_time_series) {
 metric_sample_entropy <- function(data_time_series) {
    # data_time_series should be rate_hr, rate_rsp, and pval_bp
    pracma::sample_entropy(data_time_series, edim = 2, r = 0.2*sd(data_time_series), tau = 1)
- }
+}
 
+metric_te_old <- function(te_matrix, dir_a, dir_b){
 
+te <- RTransferEntropy::transfer_entropy(
+                te_matrix %>% ungroup %>% pull(dir_a),
+                te_matrix %>% ungroup %>% pull(dir_b),
+                 lx = 3,
+                 ly = 3
+                 )
+
+te_ab <- te$coef[1,1]
+
+return(te_ab)
+
+# te_ab <- te$coef[1,1] # te a -> b
+# se_ab <- te$coef[1,3] # se a -> b
+# p_ab <- te$coef[1,4] # pvalue a -> b
+# te_ba <- te$coef[2,1] # te b -> a
+# se_ba <- te$coef[2,3] # se b -> a
+# p_ba <- te$coef[2,4] # pvalue b -> a
+# 
+# return(c(te_ab = te_ab, 
+#          se_ab = se_ab,
+#          p_ab = p_ab,
+#          te_ba = te_ba,
+#          se_ba = se_ba,
+#          p_ba = p_ba
+#          ))
+}
+
+metric_te <- function(dir_a, dir_b){
+
+te <- RTransferEntropy::transfer_entropy(
+                dir_a,
+                dir_b,
+                 lx = 3,
+                 ly = 3
+                 )
+
+te_ab <- te$coef[1,1]
+
+return(te_ab)
+}
+
+test_te_fctn <- metric_te(comb_df_1to12 %>% filter(period == 8) %>% filter(id =="mi024"), "rate_hr", "pval_bp")
+
+metric_corr_dim <- function(data_time_series){
+#  library(nonlinearTseries)
+  df_ts <- data_time_series
+#old.par = par(mfrow = c(1, 2))
+
+# tau-delay estimation based on the autocorrelation function
+tau.acf = timeLag(df_ts, technique = "acf",
+                  lag.max = 100, do.plot = F)
+# tau-delay estimation based on the mutual information function
+tau.ami = timeLag(df_ts, technique = "ami", 
+                  lag.max = 100, do.plot = F)
+#par(old.par)
+
+#par(mfrow = c(1,1))
+
+# compute embedding dimension
+emb.dim = estimateEmbeddingDim(df_ts, time.lag = tau.ami,
+                               max.embedding.dim = 15)
+
+# phase space reconstruction
+#tak = buildTakens(df_ts,embedding.dim = emb.dim, time.lag = tau.ami)
+#scatter3D(tak[,1], tak[,2], tak[,3],
+#          main = "Reconstructed Phase Space",
+#          col = 1, type="o",cex = 0.3)
+
+# Estimations
+
+# Correlation dimension
+
+cd = corrDim(df_ts,
+             min.embedding.dim = emb.dim,
+             max.embedding.dim = emb.dim + 5,
+             time.lag = tau.ami, 
+             min.radius = 0.001, max.radius = 50,
+             n.points.radius = 40,
+             do.plot=FALSE)
+#plot(cd)
+cd.est = estimate(cd, regression.range=c(2,7),
+                  use.embeddings = 8:12)
+return(cd.est)
+}
 
 ```
 
@@ -291,26 +380,40 @@ library(Rlibeemd)
 multiscale_entropy(data, scales = scales, method = "SampEn")
 
 
-
+test_te_fctn <- metric_te(comb_df_6_12 %>% filter(period == 8) %>% filter(id =="mi024"), rate_hr, pval_bp)
 
 entropy_summary_6_12 <- comb_df_6_12 %>% 
   group_by(id, period) %>% 
   na.omit() %>% 
   summarize(hr_approx_entropy = metric_approx_entropy(rate_hr),
-            bp_approx_entropy = metric_approx_entropy(pval_bp),
-            rsp_approx_entropy = metric_approx_entropy(rate_rsp),
-            hr_sample_entropy = metric_sample_entropy(rate_hr),
-            bp_sample_entropy = metric_sample_entropy(pval_bp),
-            rsp_sample_entropy = metric_sample_entropy(rate_rsp),
+           # bp_approx_entropy = metric_approx_entropy(pval_bp),
+          #  rsp_approx_entropy = metric_approx_entropy(rate_rsp),
+          #  hr_sample_entropy = metric_sample_entropy(rate_hr),
+          #  bp_sample_entropy = metric_sample_entropy(pval_bp),
+          #  rsp_sample_entropy = metric_sample_entropy(rate_rsp),
+            hr_corr_dim = metric_corr_dim(rate_hr)
             ) %>% 
   ungroup() %>% 
   left_join(id_cond_df, by = "id") %>% 
   mutate(condition = as.factor(condition)) %>% 
   select(id, period, condition, everything())
 
+te_summary_1_12 <- comb_df_1to12 %>% 
+  group_by(id, period) %>% 
+  na.omit() %>% 
+  summarize(te_hr_bp = metric_te(rate_hr, pval_bp) ,
+            te_bp_hr = metric_te(pval_bp, rate_hr),
+            te_hr_rsp = metric_te(rate_hr, rate_rsp),
+            te_rsp_hr = metric_te(rate_rsp, rate_hr),
+            te_bp_rsp = metric_te(pval_bp, rate_rsp),
+            te_rsp_bp = metric_te(rate_rsp, pval_bp)
+            ) %>% 
+  ungroup() %>% 
+  left_join(id_cond_df, by = "id") %>% 
+  mutate(condition = as.factor(condition)) %>% 
+  select(id, period, condition, everything())
 
-
-
+write_csv(te_summary_1_12, "/Users/christinekuryla/Documents/A_Columbia_Research/MiSBIE/misbie/data/te_summary_1to12_20240329.csv")
 
 
 metric_summary <- comb_df %>% 
@@ -333,6 +436,11 @@ metric_summary <- comb_df %>%
 entropy_summary <- metric_summary %>% 
   select(-condition) %>% 
   left_join(id_cond_df, by = "id") %>% 
+  select(id, period, condition, everything())
+
+metric_summary <- entropy_summary %>% 
+  select(-condition, -period) %>% 
+  left_join(hr_rhrv_summary, by = "id") %>% 
   select(id, period, condition, everything())
 
 t.test(data = entropy_summary %>% filter(condition != "Deletion"),
@@ -429,10 +537,11 @@ for (metric in metric_names){
 metric_names <- colnames(entropy_summary %>% select(-id, -period, -condition))
 metric_names <- colnames(hr_rhrv_summary %>% ungroup %>% select(-id, -period, -condition))
 
-a <- hr_rhrv_summary %>% 
-  mutate(test = scale(hr_IRRR))
+#long_summary <- hr_rhrv_summary %>% 
+ # mutate(test = scale(hr_IRRR))
 
-long_summary <- metric_summary %>% 
+long_summary <- hr_rhrv_summary %>% 
+#long_summary <- entropy_summary %>% 
   pivot_longer(cols = metric_names,
                names_to = "metric",
                values_to = "value")
@@ -637,7 +746,7 @@ ggplot(heatmap_data, aes(x = condition, y = period, fill = mean_rsp_approx_entro
 ```
 
 
-# Heart Rate
+# Heart and Respiration Metrics
 
 ## SD (just for fun)
 
@@ -669,16 +778,56 @@ pnn50 <- function(data_delta_t){
 }
 #pnn50(dt_test)
 
-hr_summary <- hr_df %>% 
+sdrr <- function(data_delta_t){
+  sd(data_delta_t)
+}
+
+
+
+hr_df_dt <- hr_df %>% 
+  ungroup() %>% 
+  mutate(delta_t_hr = pSec - lag(pSec)) %>% 
+  mutate(delta_t_hr = if_else(abs(delta_t_hr) > 3, NA, delta_t_hr)) 
+rsp_df_dt <- rsp_df %>% 
+  ungroup() %>% 
+  mutate(delta_t_rsp_p = pSec - lag(pSec),
+         delta_t_rsp_t = tSec - lag(tSec)) %>% 
+  mutate(delta_t_rsp_p = if_else(abs(delta_t_rsp_p) > 20, NA, delta_t_rsp_p)) %>% 
+  mutate(delta_t_rsp_t = if_else(abs(delta_t_rsp_t) > 20, NA, delta_t_rsp_t)) 
+
+hr_summary <- hr_df_dt %>% 
+  select(-"condition") %>% 
   group_by(id, period) %>% 
-  na.omit() %>% 
-  summarize(hr_dt_mean = mean(delta_t),
-            hr_dt_sd = sd(delta_t),
-            hr_rmssd = rmssd(delta_t),
-            hr_pnn50 = pnn50(delta_t)) %>% 
+#  na.omit() %>% 
+  summarize(#hr_dt_mean = mean(delta_t_hr),
+            #hr_dt_sd = sd(delta_t_hr),
+            hr_rmssd = rmssd(delta_t_hr),
+         #   hr_pnn50 = pnn50(delta_t_hr),
+            hr_sdrr = sd(delta_t_hr)) %>% 
   ungroup() %>% 
   left_join(id_cond_df, by = "id") %>% 
   mutate(condition = as.factor(condition))
+
+rsp_summary <- rsp_df_dt %>% 
+  select(-"condition") %>% 
+  group_by(id, period) %>% 
+  na.omit() %>% 
+  summarize(rsp_p_rmssd = rmssd(delta_t_rsp_p),
+          #  rsp_p_pnn50 = pnn50(delta_t_rsp_p),
+            rsp_p_sd = sd(delta_t_rsp_p, na.rm = TRUE),
+            rsp_t_rmssd = rmssd(delta_t_rsp_t),
+          #  rsp_t_pnn50 = pnn50(delta_t_rsp_t),
+            rsp_t_sd = sd(delta_t_rsp_t, na.rm = TRUE)) %>% 
+  ungroup() %>% 
+  left_join(id_cond_df, by = "id") %>% 
+  mutate(condition = as.factor(condition))
+
+rsp_hr_dt_summary <- full_join(hr_summary, rsp_summary, by = c("id", "condition", "period")) %>% 
+  select("id", "period", "condition", everything()) %>% 
+  filter(id != "mi031") 
+
+rsp_hr_dt_summary_612 <- rsp_hr_dt_summary %>% 
+  filter(period %in% 6:12)
 
 hist(hr_summary$hr_dt_sd)
 hist(hr_summary$hr_dt_mean)
@@ -700,6 +849,11 @@ t.test(data = hr_summary %>% filter(condition == "Mutation" | condition == "Dele
 t.test(data = hr_summary %>% filter(condition == "Control" | condition == "Mutation"), hr_rmssd ~ condition)
 t.test(data = hr_summary %>% filter(condition == "Control" | condition == "Deletion"), hr_rmssd ~ condition)
 t.test(data = hr_summary %>% filter(condition == "Mutation" | condition == "Deletion"), hr_rmssd ~ condition)
+
+# t-test for hr pnn50
+t.test(data = hr_summary %>% filter(condition == "Control" | condition == "Mutation") %>% filter(period %in% 1:12), hr_pnn50 ~ condition)
+t.test(data = hr_summary %>% filter(condition == "Control" | condition == "Deletion"), hr_pnn50 ~ condition)
+t.test(data = hr_summary %>% filter(condition == "Mutation" | condition == "Deletion"), hr_pnn50 ~ condition)
 
 #hr_summary <- hr_summary_all %>% filter(period == 2)
 
@@ -735,6 +889,9 @@ pca_prep <- hr_summary %>%
 #   na.omit() 
 
 pca_result <- prcomp(pca_prep, center = TRUE, scale = TRUE)
+view(pca_result)
+loadings(pca_result)
+
 id_to_group <- hr_summary %>% 
   select(id, condition) %>% 
   unique()
@@ -923,6 +1080,12 @@ hr_summary_all %>%
  # theme(axis.text.x=element_blank(),axis.ticks.x=element_blank()) +             
 #  theme(strip.text.x = element_text(size = 7), strip.text.y = element_text(size = 7))  # Change font size
 
+
+```
+
+```{r}
+
+library(frac)
 
 ```
 
