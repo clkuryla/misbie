@@ -1,0 +1,761 @@
+---
+title: "Comparing and Combining Metrics"
+author: "Christine Lucille Kuryla"
+date: "2024-03-31"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+# Load Data
+
+```{r}
+
+library(tidyverse)
+
+entropy_summary <- read_csv("/Users/christinekuryla/Documents/A_Columbia_Research/MiSBIE/misbie/data/results/entropy_summary20240319.csv") %>% 
+  select("id", "condition", "period", 
+         "hr_approx_entropy", "hr_sample_entropy",
+         "rsp_approx_entropy", "rsp_sample_entropy",
+         "bp_approx_entropy", "bp_sample_entropy")
+
+hr_rhrv_summary <- read_csv("/Users/christinekuryla/Documents/A_Columbia_Research/MiSBIE/misbie/data/results/hr_rhrv_summary_20240319.csv") %>% 
+  select("id", "condition", "period", 
+         "hr_SDANN",
+         "hr_MADRR", "hr_pNN50", "hr_SDSD", "hr_rMSSD",
+         "hr_TINN", "hr_HRVi",
+         "hr_SDNNIDX", "hr_SDNN", "hr_IRRR")
+
+te_summary <- read_csv("/Users/christinekuryla/Documents/A_Columbia_Research/MiSBIE/misbie/data/results/te_summary_20240417.csv") %>% 
+  select("id", "condition", "period", everything())
+
+rsp_hr_dt_summary <- read_csv("/Users/christinekuryla/Documents/A_Columbia_Research/MiSBIE/misbie/data/results/rsp_hr_dt_summary_20240417.csv") %>% 
+  select("id", "condition", "period", everything())
+
+
+# Periods of interest
+
+periods_16 <- unique(entropy_summary$period)
+
+# combine
+
+combined_1 <- full_join(entropy_summary, hr_rhrv_summary, by = c("id", "condition", "period"))
+combined_2 <- full_join(te_summary, rsp_hr_dt_summary, by = c("id", "condition", "period"))
+
+combined_summary_full <- full_join(combined_1, combined_2, by = c("id", "condition", "period")) %>% 
+  filter(period %in% periods_16) %>% 
+  mutate(period = fct_relevel(as.factor(period),
+                              c("1","2","3","4","5","6","7","8","9","10","11","12", "DBT","ST","SST","CP")))
+
+combined_1 <- inner_join(entropy_summary, hr_rhrv_summary, by = c("id", "condition", "period"))
+combined_2 <- inner_join(te_summary, rsp_hr_dt_summary, by = c("id", "condition", "period"))
+
+combined_summary_inner <- full_join(combined_1, combined_2, by = c("id", "condition", "period")) %>% 
+  filter(period %in% periods_16) %>% 
+  mutate(period = fct_relevel(as.factor(period),
+                              c("1","2","3","4","5","6","7","8","9","10","11","12", "DBT","ST","SST","CP")))
+
+combined_summary <- combined_summary_inner %>% 
+  na.omit()
+
+#######
+
+combined_summary_6to12 <- combined_summary %>% 
+  filter(period %in% 6:12)
+combined_summary_1to12 <- combined_summary %>% 
+  filter(period %in% 1:12)
+
+
+
+####
+
+# 6-12 idk
+combined_summary <- right_join(hr_rhrv_summary %>% filter(period %in% 6:12), entropy_summary %>% filter(period %in% 6:12), by = c("id", "condition", "period"))
+combined_summary_singlevar <- combined_summary
+
+combined_summary_6to12all <- right_join(combined_summary %>% filter(period %in% 6:12), te_summary %>% filter(period %in% 6:12) %>% mutate(period = as.character(period)), by = c("id", "condition", "period"))
+
+combined_summary <- combined_summary_6to12all
+
+combined_summary_more <- left_join(combined_summary_6to12all, rsp_hr_dt_summary_612)
+
+combined_summary <- combined_summary_more
+
+```
+
+
+```{r, include = FALSE, eval = FALSE}
+
+te_summary_1_12 <- read_csv("/Users/christinekuryla/Documents/A_Columbia_Research/MiSBIE/misbie/data/results/te_summary_1to12_20240329.csv")
+
+te_summary_bppt_and_4 <- read_rds("/Users/christinekuryla/Documents/A_Columbia_Research/MiSBIE/misbie/TE_df_original.RDS")
+
+
+
+te_4_wide <- te_summary_bppt_and_4 %>% 
+    select(-Type) %>% 
+    pivot_wider(names_from = Direction,
+    values_from = TE_value,
+    ) %>% 
+    rename(te_hr_bp = Hr_to_Bp,
+           te_bp_hr = Bp_to_Hr,
+           te_hr_rsp = Hr_to_Rsp,
+           te_rsp_hr = Rsp_to_Hr,
+           te_rsp_bp = Rsp_to_Bp,
+           te_bp_rsp = Bp_to_Rsp,
+           period = phase,
+           condition = Status) %>% 
+    select(colnames(te_summary_1_12))
+
+all(colnames(te_summary_1_12) == colnames(te_4_wide))
+
+te_all <- rbind(te_summary_1_12, te_4_wide)
+
+write_csv(te_all, "/Users/christinekuryla/Documents/A_Columbia_Research/MiSBIE/misbie/data/results/te_summary_20240417.csv")
+
+
+
+# right_join(te_summary_1_12, te_4_wide, by = c("id", "condition", "period"))
+
+
+```
+
+
+```{r summary_stats}
+
+combined_summary_full %>% 
+  group_by(condition) %>% 
+  summarize(n = n_distinct(id))
+
+combined_summary_inner %>% 
+  group_by(condition) %>% 
+  summarize(n = n_distinct(id))
+
+combined_summary %>% 
+  group_by(condition) %>% 
+  summarize(n = n_distinct(id))
+
+rsp_hr_dt_summary %>% 
+  group_by(condition) %>% 
+  summarize(n = n_distinct(id))
+
+combined_summary_full %>% # Has all 12 plus the 4 tasks
+  group_by(period) %>% 
+  summarize(n = n())
+
+entropy_summary %>% # Has all 12 plus the 4 tasks
+  group_by(period) %>% 
+  summarize(n = n())
+
+hr_rhrv_summary %>% # Has all 12 plus the 4 tasks plus a couple extra
+  group_by(period) %>% 
+  summarize(n = n())
+
+te_summary %>% # 12 + 4 + base, post, pre, task
+  group_by(period) %>% 
+  summarize(n = n())
+
+rsp_hr_dt_summary %>% # 12 + 4 + ACquisition, C3
+  group_by(period) %>% 
+  summarize(n = n())
+
+
+
+```
+
+
+# Correlation Heatmaps
+
+```{r corr_heatmaps}
+# Heatmaps of the metrics 
+# All together and by group
+
+library(pheatmap)
+library(RColorBrewer)
+
+pheatmap(cor(combined_summary %>% ungroup %>% select(c(-"id", -"condition", -"period")) , use = "complete.obs"
+             ), 
+         main = "All Subjects", 
+         cluster_rows = FALSE, cluster_cols = FALSE, display_numbers = TRUE,
+         color = colorRampPalette(rev(brewer.pal(n = 7, name = "RdYlBu")))(length(seq(-1, 1, by = .1))), breaks = seq(-1, 1, by = .1))
+
+pheatmap(cor(combined_summary %>% ungroup %>% filter(condition == "Control") %>% select(c(-"id", -"condition", -"period")), use = "complete.obs"
+             ),
+         main = "Control", 
+         cluster_rows = FALSE, cluster_cols = FALSE, display_numbers = TRUE,
+         color = colorRampPalette(rev(brewer.pal(n = 7, name = "RdYlBu")))(length(seq(-1, 1, by = .1))), breaks = seq(-1, 1, by = .1))
+
+pheatmap(cor(combined_summary %>% ungroup %>% filter(condition == "Mutation") %>% select(c(-"id", -"condition", -"period")) , use = "complete.obs"
+             ), 
+         main = "Mutation",
+         cluster_rows = FALSE, cluster_cols = FALSE, display_numbers = TRUE,
+         color = colorRampPalette(rev(brewer.pal(n = 7, name = "RdYlBu")))(length(seq(-1, 1, by = .1))), breaks = seq(-1, 1, by = .1))
+
+pheatmap(cor(combined_summary %>% ungroup %>% filter(condition == "Deletion") %>% select(c(-"id", -"condition", -"period")) , use = "complete.obs"
+             ), 
+         main = "Deletion",
+         cluster_rows = FALSE, cluster_cols = FALSE, display_numbers = TRUE,
+         color = colorRampPalette(rev(brewer.pal(n = 7, name = "RdYlBu")))(length(seq(-1, 1, by = .1))), breaks = seq(-1, 1, by = .1))
+
+library(PerformanceAnalytics)
+chart.Correlation(combined_summary %>% ungroup %>% select(c(-"id", -"condition", -"period")), histogram=TRUE, pch=19, title = "RHRV")
+
+library(corrplot)
+corrplot(cor(combined_summary %>% ungroup %>% #filter(condition == "Control") %>%  
+               select(c(-"id", -"condition", -"period")), 
+             use = "complete.obs"
+             ), 
+         type = "upper", 
+         tl.col = "black", tl.srt = 45, 
+         insig = 'label_sig', sig.level = c(0.001, 0.01, 0.05),
+         main = "All Subjects")
+
+corrplot(cor(combined_summary %>% ungroup %>% #filter(condition == "Control") %>%  
+               select(c(-"id", -"condition", -"period")), 
+             use = "complete.obs"
+             ), 
+         type = "upper", 
+         tl.col = "black", tl.srt = 45, 
+       #  p.mat = testRes$p, 
+        # insig = 'label_sig', sig.level = c(0.001, 0.01, 0.05),
+         col = COL2('RdYlBu', 100),
+         main = "All Subjects")
+
+
+corr_all <- cor(combined_summary %>% ungroup %>% filter(condition == "Control") %>% select(c(-"id", -"condition", -"period")) )
+
+library(igraph)
+```
+
+# PCA
+
+```{r pca}
+pca_rhrv <- hr_rhrv_summary %>% select(-c(id, period, condition)) %>% ungroup() %>% na.omit()
+pca <- princomp(pca_rhrv, cor = TRUE)
+summary(pca)
+loadings(pca)
+
+
+
+
+```
+
+# Network Vizualization and Analysis
+
+```{r graphs}
+
+library(igraph)
+library(RColorBrewer)
+
+summary_mat <- combined_summary
+
+corr_all <- cor(summary_mat %>% ungroup %>% select(c(-"id", -"condition", -"period")) %>% 
+                  select("hr_sdrr", "hr_pNN50", "hr_HRVi", "hr_rmssd", 
+                             "hr_approx_entropy", "hr_sample_entropy",
+                             "bp_approx_entropy", #"bp_sample_entropy",
+                             "rsp_approx_entropy", #"rsp_sample_entropy",
+                             "te_rsp_bp", "te_hr_rsp"
+                             ))
+corr_control <- cor(summary_mat %>% ungroup %>% filter(condition == "Control") %>% select(c(-"id", -"condition", -"period")) %>% 
+                      select("hr_sdrr", "hr_pNN50", "hr_HRVi", "hr_rmssd", 
+                             "hr_approx_entropy", "hr_sample_entropy",
+                             "bp_approx_entropy", #"bp_sample_entropy",
+                             "rsp_approx_entropy", #"rsp_sample_entropy",
+                             "te_rsp_bp", "te_hr_rsp"
+                             ))
+corr_mutation <- cor(summary_mat %>% ungroup %>% filter(condition == "Mutation") %>% select(c(-"id", -"condition", -"period")) %>% 
+                       select("hr_sdrr", "hr_pNN50", "hr_HRVi", "hr_rmssd", 
+                             "hr_approx_entropy", "hr_sample_entropy",
+                             "bp_approx_entropy", #"bp_sample_entropy",
+                             "rsp_approx_entropy", #"rsp_sample_entropy",
+                             "te_rsp_bp", "te_hr_rsp"
+                             ))
+corr_deletion <- cor(summary_mat %>% ungroup %>% filter(condition == "Deletion") %>% select(c(-"id", -"condition", -"period")) %>% 
+                       select("hr_sdrr", "hr_pNN50", "hr_HRVi", "hr_rmssd", 
+                             "hr_approx_entropy", "hr_sample_entropy",
+                             "bp_approx_entropy", #"bp_sample_entropy",
+                             "rsp_approx_entropy", #"rsp_sample_entropy",
+                             "te_rsp_bp", "te_hr_rsp"
+                             ))
+
+
+# Assuming 'g' is your graph object from the previous steps
+# Define color gradients
+positive_colors <- colorRampPalette(c("white", "red"))(100)
+negative_colors <- colorRampPalette(c("white", "blue"))(100)
+
+# Function to get color based on correlation
+get_edge_color <- function(weight) {
+  if (weight > 0) {
+    positive_colors[max(1, ceiling(weight * 100))]
+  } else {
+    negative_colors[max(1, ceiling(abs(weight) * 100))]
+  }
+}
+
+
+g_all <- graph_from_adjacency_matrix(corr_all, mode = "undirected", weighted = TRUE, diag = FALSE)
+g_control <- graph_from_adjacency_matrix(corr_control, mode = "undirected", weighted = TRUE, diag = FALSE)
+g_mutation <- graph_from_adjacency_matrix(corr_mutation, mode = "undirected", weighted = TRUE, diag = FALSE)
+g_deletion <- graph_from_adjacency_matrix(corr_deletion, mode = "undirected", weighted = TRUE, diag = FALSE)
+
+# Function to get color based on weight, assuming weight ranges from -1 to 1
+get_edge_color <- function(weight) {
+  if (weight > 0) {
+    # Scale the positive weight to fit the 1 to 100 range
+    index <- max(1, ceiling(weight * 100))
+    positive_colors[index]
+  } else {
+    # Scale the negative weight to fit the 1 to 100 range
+    index <- max(1, ceiling(abs(weight) * 100))
+    negative_colors[index]
+  }
+}
+
+E(g_all)$color <- sapply(E(g_all)$weight, get_edge_color)
+E(g_control)$color <- sapply(E(g_control)$weight, get_edge_color)
+E(g_mutation)$color <- sapply(E(g_mutation)$weight, get_edge_color)
+E(g_deletion)$color <- sapply(E(g_deletion)$weight, get_edge_color)
+
+E(g_control)$weight <- sapply(E(g_control)$weight, abs)
+
+# Apply colors to edges based on their weight (correlation)
+#E(g)$color <- sapply(E(g)$weight, get_edge_color)
+
+
+set.seed(5790)
+
+# Plot the graph
+plot(g_deletion, 
+     layout = layout.auto(g_mutation), 
+     vertex.label = V(g)$name, 
+     edge.width = 2,
+   #  edge.label = round(E(g)$weight, 2),
+     vertex.color = "lightblue",
+     vertex.size = 30,
+     vertex.frame.color = NA,  # Remove the border around nodes
+     main = "Deletion Group")
+
+```
+
+```{r}
+
+df <- as.data.frame(combined_summary %>% 
+                      filter(condition == "Mutation") %>% 
+                      filter(period == 10) %>% 
+                      ungroup %>% 
+                      select("hr_SDNN", "hr_pNN50", "hr_HRVi", "hr_IRRR", 
+                             "hr_approx_entropy", "hr_sample_entropy",
+                             "bp_approx_entropy", "bp_sample_entropy",
+                             "rsp_approx_entropy", "rsp_sample_entropy",
+                             "te_rsp_bp"
+                             ) #%>% 
+                    #  select(c(-"id", -"period", -"condition"))
+                      )
+
+# Assume 'df' is your data frame
+variables <- colnames(df)
+n <- ncol(df)
+
+# Initialize a matrix to store p-values
+p_matrix <- matrix(NA, n, n, dimnames = list(variables, variables))
+
+# Compute correlation and p-values
+for (i in 1:(n-1)) {
+  for (j in (i+1):n) {
+    test_result <- cor.test(df[[i]], df[[j]])
+    p_matrix[i, j] <- test_result$p.value
+    p_matrix[j, i] <- test_result$p.value
+  }
+}
+
+# Your existing correlation matrix
+corr_matrix <- cor(df)
+
+# Use p-value threshold to adjust correlation matrix for significant correlations only
+corr_matrix[is.na(p_matrix) | p_matrix >= 0.05] <- 0
+
+library(igraph)
+
+# Create the graph from the adjusted correlation matrix
+g <- graph_from_adjacency_matrix(corr_matrix, mode = "undirected", weighted = TRUE, diag = FALSE)
+E(g)$color <- sapply(E(g)$weight, get_edge_color)
+
+# Visualize the graph
+plot(g, 
+    # layout = layout_on_sphere(g), 
+     vertex.label = V(g)$name, 
+     edge.label = round(E(g)$weight, 2),
+     edge.width = abs(E(g)$weight) * 2,
+     vertex.color = "lightblue",
+     vertex.size = 20,
+     vertex.frame.color = NA,
+     main = "Graph of Significant Correlations (p < 0.05)")
+
+plot(g, 
+     layout = layout_nicely(g), 
+     vertex.label = V(g)$name, 
+     edge.width = 2,
+     edge.label = round(E(g)$weight, 2),
+     vertex.color = "lightblue",
+     vertex.size = 30,
+     vertex.frame.color = NA,  # Remove the border around nodes
+     main = "Graph of Correlation Matrix with Gradient Edges")
+
+
+```
+
+
+```{r}
+
+combined_summary %>% 
+  ggplot(aes(y = rsp_approx_entropy, x = rsp_t_rmssd, color = condition)) +
+  geom_smooth(method = lm) +
+  geom_point()
+
+```
+
+```{r}
+
+library(dplyr)
+library(tidyr)
+library(broom)
+
+# Assuming df has columns: id, condition, period, and metric
+
+all_metric_names <- colnames(combined_summary %>% 
+                               select(-"id", -"condition", -"period"))
+
+library(dplyr)
+library(tidyr)
+library(broom)
+
+# Assuming df has columns: id, condition, period, and multiple metrics
+# all_metric_names is your vector of metric names
+
+results_list <- lapply(all_metric_names, function(metric) {
+  metric_data <- combined_summary %>%
+    select(id, condition, period, metric) %>%
+    rename(metric_value = metric)
+  
+  pairwise_comparisons <- metric_data %>%
+    group_by(period) %>%
+    do({
+      subset_data <- .
+      comparisons <- expand.grid(unique(subset_data$condition), unique(subset_data$condition))
+      comparisons <- subset(comparisons, Var1 != Var2)
+      comparisons %>%
+        mutate(
+          mean_1 = mapply(function(x, y) t.test(metric_value ~ condition, data = metric_data, subset = condition %in% c(x, y))$estimate[1],
+                            Var1, Var2),
+          mean_2 = mapply(function(x, y) t.test(metric_value ~ condition, data = metric_data, subset = condition %in% c(x, y))$estimate[2],
+                            Var1, Var2),
+          t_test_p = mapply(function(x, y) t.test(metric_value ~ condition, data = subset_data, subset = condition %in% c(x, y))$p.value,
+                            Var1, Var2),
+          wilcox_test_p = mapply(function(x, y) wilcox.test(metric_value ~ condition, data = subset_data, subset = condition %in% c(x, y))$p.value,
+                                 Var1, Var2)
+        )
+    }) %>%
+    unnest()
+  
+  group_means <- metric_data %>%
+    group_by(condition, period) %>%
+    summarise(mean_metric = mean(metric_value, na.rm = TRUE))
+  
+  # Combine results
+  results <- left_join(pairwise_comparisons, group_means, by = c("Var1" = "condition", "period"))
+  results$metric <- metric  # Add the metric name to the results
+  
+  return(results)
+})
+
+# Combine all results into one dataframe
+final_results <- bind_rows(results_list)
+
+p_val_per_period <- final_results 
+  
+
+# All combined
+
+library(dplyr)
+library(tidyr)
+
+# Assuming df has columns: id, condition, period, and multiple metrics
+# all_metric_names is your vector of metric names
+
+results_list <- lapply(all_metric_names, function(metric) {
+  metric_data <- combined_summary %>%
+    select(id, condition, metric) %>%
+    rename(metric_value = metric)
+  
+  pairwise_comparisons <- metric_data %>%
+    group_by(condition) %>%
+    summarise(
+      mean_metric = mean(metric_value, na.rm = TRUE)
+    ) %>%
+    do({
+      subset_data <- .
+      comparisons <- expand.grid(unique(subset_data$condition), unique(subset_data$condition))
+      comparisons <- subset(comparisons, Var1 != Var2)
+      comparisons %>%
+        mutate(
+          mean_1 = mapply(function(x, y) t.test(metric_value ~ condition, data = metric_data, subset = condition %in% c(x, y))$estimate[1],
+                            Var1, Var2),
+          mean_2 = mapply(function(x, y) t.test(metric_value ~ condition, data = metric_data, subset = condition %in% c(x, y))$estimate[2],
+                            Var1, Var2),
+          t_test_p = mapply(function(x, y) t.test(metric_value ~ condition, data = metric_data, subset = condition %in% c(x, y))$p.value,
+                            Var1, Var2),
+          wilcox_test_p = mapply(function(x, y) wilcox.test(metric_value ~ condition, data = metric_data, subset = condition %in% c(x, y))$p.value,
+                                 Var1, Var2)
+        )
+    })
+
+  # Add the metric name to the results
+  pairwise_comparisons$metric <- metric
+  
+  return(pairwise_comparisons)
+})
+
+# Combine all results into one dataframe
+p_val_612 <- bind_rows(results_list)
+
+
+```
+
+# K means
+
+```{r kmeans}
+
+# scale probably
+
+??kmeans
+
+comb_sum_k <- combined_summary %>% 
+  rowid_to_column(var = "obs") 
+
+kmeans <- kmeans(comb_sum_k %>% dplyr::select(-),
+                 centers = 9,
+                 nstart = 100)
+  
+  # do with average per subject in the 6:12
+  
+  
+  # do hc to see if period and group come out that would be cool...do that annotation in the heatmap
+  # do with all observations separate and color it 
+
+
+
+
+```
+
+
+PCA
+
+```{r}
+
+# PCA 
+
+summary_scaled <- scale(combined_summary %>% select(-c("id", "condition", "period")) %>% select(-"hr_SDANN") %>% na.omit())#, 
+                        #center = TRUE, 
+                        #scale = TRUE)
+
+summary_scaled <- scale(combined_summary %>% select(-c("id", "condition", "period")) %>% select(-"hr_SDANN"), center = TRUE, scale = TRUE)
+pca_scaled <- princomp(summary_scaled)
+summary(pca_scaled)
+loadings(pca_scaled)
+screeplot(pca_scaled)
+library(broom)
+
+dim(pca_scaled$scores)
+dim(combined_summary %>% na.omit())
+
+scores_df <- cbind(combined_summary %>% na.omit(), pca_scaled$scores)
+
+summary(scores_df %>% filter(condition == "Control") %>% pull (Comp.3))
+summary(scores_df %>% filter(condition == "Mutation") %>% pull (Comp.3))
+summary(scores_df %>% filter(condition == "Deletion") %>% pull (Comp.3))
+
+
+data_long <- pivot_longer(scores_df, cols = starts_with("Comp"), names_to = "Component", values_to = "Value")
+
+perform_t_tests <- function(df, control_group, test_group) {
+  t_test_result <- t.test(Value ~ condition, data = df %>% filter(condition %in% c(control_group, test_group)))
+  if (t_test_result$p.value < 0.05) {
+    return("*")
+  } else {
+    return("")
+  }
+}
+
+# Calculate annotations for each component
+annotations <- data_long %>%
+  group_by(Component) %>%
+  summarize(
+    Mutation_Star = perform_t_tests(cur_data(), "Control", "Mutation"),
+    Deletion_Star = perform_t_tests(cur_data(), "Control", "Deletion"),
+    Max_Value = max(Value)
+  ) %>%
+  pivot_longer(cols = c("Mutation_Star", "Deletion_Star"), names_to = "Test", values_to = "Star") %>%
+  mutate(Test = str_remove(Test, "_Star"))
+
+# Merge annotations back with data for plotting
+data_long <- left_join(data_long, annotations, by = "Component")
+
+
+
+library(tidyr)
+data_long <- pivot_longer(scores_df, cols = starts_with("Comp"), names_to = "Component", values_to = "Value") %>% 
+  filter(Component %in% c("Comp.1", "Comp.2", "Comp.3", "Comp.4", "Comp.5", "Comp.6", "Comp.7", "Comp.8", "Comp.9"))
+
+# Creating the box plot
+p <- ggplot(data_long, aes(x = condition, y = Value, fill = condition)) +
+  geom_boxplot() +
+  facet_wrap(~ Component, scales = "free") +
+  theme_minimal() +
+  labs(title = "Box Plot of Multiple Components", x = "Group", y = "Value")
+
+p
+
+t.test(Comp.1 ~ condition, data = scores_df %>% filter(condition %in% c("Mutation", "Control")))
+t.test(Comp.1 ~ condition, data = scores_df %>% filter(condition %in% c("Deletion", "Control")))
+t.test(Comp.2 ~ condition, data = scores_df %>% filter(condition %in% c("Mutation", "Control")))
+t.test(Comp.2 ~ condition, data = scores_df %>% filter(condition %in% c("Deletion", "Control")))
+t.test(Comp.3 ~ condition, data = scores_df %>% filter(condition %in% c("Mutation", "Control")))
+t.test(Comp.3 ~ condition, data = scores_df %>% filter(condition %in% c("Deletion", "Control")))
+t.test(Comp.4 ~ condition, data = scores_df %>% filter(condition %in% c("Mutation", "Control")))
+t.test(Comp.4 ~ condition, data = scores_df %>% filter(condition %in% c("Deletion", "Control")))
+t.test(Comp.5 ~ condition, data = scores_df %>% filter(condition %in% c("Mutation", "Control")))
+t.test(Comp.5 ~ condition, data = scores_df %>% filter(condition %in% c("Deletion", "Control")))
+t.test(Comp.6 ~ condition, data = scores_df %>% filter(condition %in% c("Mutation", "Control")))
+t.test(Comp.6 ~ condition, data = scores_df %>% filter(condition %in% c("Deletion", "Control")))
+t.test(Comp.7 ~ condition, data = scores_df %>% filter(condition %in% c("Mutation", "Control")))
+t.test(Comp.7 ~ condition, data = scores_df %>% filter(condition %in% c("Deletion", "Control")))
+t.test(Comp.8 ~ condition, data = scores_df %>% filter(condition %in% c("Mutation", "Control")))
+t.test(Comp.8 ~ condition, data = scores_df %>% filter(condition %in% c("Deletion", "Control")))
+t.test(Comp.9 ~ condition, data = scores_df %>% filter(condition %in% c("Mutation", "Control")))
+t.test(Comp.9 ~ condition, data = scores_df %>% filter(condition %in% c("Deletion", "Control")))
+
+
+
+pca_scaled$loadings
+summary(pca_scaled)[1]
+
+# Get vector of proportion of variance for each PC for the plot
+variances <- pca_scaled$sdev^2
+total_variance <- sum(variances)
+proportion_variance_explained <- variances / total_variance
+
+# make df for pca heatmap
+loadings_df <- pca_scaled$loadings[,1:8]
+colnames(loadings_df) <- c(paste0("PC1: ", round(proportion_variance_explained[1] * 100, 2), "%"),
+                           paste0("PC2: ", round(proportion_variance_explained[2] * 100, 2), "%"),
+                           paste0("PC3: ", round(proportion_variance_explained[3] * 100, 2), "%"),
+                           paste0("PC4: ", round(proportion_variance_explained[4] * 100, 2), "%"),
+                           paste0("PC5: ", round(proportion_variance_explained[5] * 100, 2), "%"),
+                           paste0("PC6: ", round(proportion_variance_explained[6] * 100, 2), "%"),
+                           paste0("PC7: ", round(proportion_variance_explained[7] * 100, 2), "%"),
+                           paste0("PC8: ", round(proportion_variance_explained[8] * 100, 2), "%")
+                          )
+
+
+library(pheatmap)
+pheatmap(loadings_df, cluster_rows = FALSE, cluster_cols = FALSE,
+         display_numbers = TRUE,
+         main = "PCA Loadings - All")
+
+
+
+pca_all <- princomp(combined_summary %>% select(-c("id", "condition", "period")))
+summary(pca_all)
+loadings(pca_all)
+pca_all$scale
+
+
+
+
+# PCA 
+
+summary_scaled_control <- scale(combined_summary %>% filter(condition == "Control") %>% select(-c("id", "condition", "period")) %>% select(-"hr_SDANN") %>% na.omit(), center = TRUE, scale = TRUE)
+pca_scaled_control <- princomp(summary_scaled_control)
+summary(pca_scaled_control)
+loadings(pca_scaled_control)
+screeplot(pca_scaled_control)
+
+pca_scaled_control$scores
+pca_scaled_control$loadings
+
+loadings_df_control <- pca_scaled_control$loadings[,1:8]
+# colnames(loadings_df) <- c("PC1: 39.6%",
+#                         "PC2: 15.0%",
+#                         "PC3: 9.9%",
+#                         "PC4: 6.8%",
+#                         "PC5: 5.2%",
+#                         "PC6: 4.7%",
+#                         "PC7: 4.1%",
+#                         "PC8: 3.9%")
+
+library(pheatmap)
+pheatmap(loadings_df_control, cluster_rows = FALSE, cluster_cols = FALSE,
+         display_numbers = TRUE,
+         main = "PCA Loadings -- Controls")
+
+
+
+
+
+
+summary_scaled_mutation <- scale(combined_summary %>% filter(condition == "Mutation") %>% select(-c("id", "condition", "period")) %>% select(-"hr_SDANN") %>% na.omit(), center = TRUE, scale = TRUE)
+pca_scaled_mutation <- princomp(summary_scaled_mutation)
+summary(pca_scaled_mutation)
+loadings(pca_scaled_mutation)
+#screeplot(pca_scaled_mutation)
+
+pca_scaled_mutation$scores
+pca_scaled_mutation$loadings
+
+loadings_df_mutation <- pca_scaled_mutation$loadings[,1:8]
+# colnames(loadings_df) <- c("PC1: 39.6%",
+#                         "PC2: 15.0%",
+#                         "PC3: 9.9%",
+#                         "PC4: 6.8%",
+#                         "PC5: 5.2%",
+#                         "PC6: 4.7%",
+#                         "PC7: 4.1%",
+#                         "PC8: 3.9%")
+
+library(pheatmap)
+pheatmap(loadings_df_mutation, cluster_rows = FALSE, cluster_cols = FALSE,
+         display_numbers = TRUE,
+         main = "PCA Loadings -- Mutation Group")
+
+
+
+
+summary_scaled_deletion <- scale(combined_summary %>% filter(condition == "Deletion") %>% select(-c("id", "condition", "period")) %>% select(-"hr_SDANN") %>% na.omit(), center = TRUE, scale = TRUE)
+pca_scaled_deletion <- princomp(summary_scaled_deletion)
+summary(pca_scaled_deletion)
+loadings(pca_scaled_deletion)
+#screeplot(pca_scaled_deletion)
+
+pca_scaled_deletion$scores
+pca_scaled_deletion$loadings
+
+loadings_df_deletion <- pca_scaled_deletion$loadings[,1:8]
+# colnames(loadings_df) <- c("PC1: 39.6%",
+#                         "PC2: 15.0%",
+#                         "PC3: 9.9%",
+#                         "PC4: 6.8%",
+#                         "PC5: 5.2%",
+#                         "PC6: 4.7%",
+#                         "PC7: 4.1%",
+#                         "PC8: 3.9%")
+
+library(pheatmap)
+pheatmap(loadings_df_deletion, cluster_rows = FALSE, cluster_cols = FALSE,
+         display_numbers = TRUE,
+         main = "PCA Loadings -- Deletion Group")
+```
+

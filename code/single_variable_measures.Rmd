@@ -1,0 +1,1290 @@
+---
+title: "Single Variable Measures"
+author: "Christine Lucille Kuryla"
+date: "2024-02-22"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    toc_collapsed: true
+    toc_depth: 3
+    number_sections: true
+    code_folding: show 
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(knitr)
+library(RColorBrewer)
+
+knitr::opts_chunk$set(
+	echo = TRUE,
+	warning = FALSE,
+	fig.width = 8, 
+  fig.height = 6,
+  out.width = "90%"
+)
+
+theme_set(theme_minimal() + theme(legend.position = "bottom"))
+
+
+```
+
+# Introduction
+
+## MiSBIE Data Background
+
+See "misbie_explore.Rmd" for more details about the variables and some EDA. 
+
+*tl;dr:* There are three groups: healthy, mutation, and deletion. The mutation and deletion groups are subjects with genetic mitochondrial abnormalities. Continuous heart rate, respiration rate, and blood pressure measures were recorded for 71 subjects over several tasks and recovery periods.
+
+## Data Forms
+
+Note the raw data allows for HR and RR to be analyzed independent of rate because the raw data is each systole/diastole beat and each inspiration/expiration, respectively. Rate can be calculated per interval or may be interpolated. 
+
+At least two types of forms of the data will be used:
+
+1. Non-constant delta-t --> raw data for heart rate and respiration rate
+2. Constant delta-t --> interpolated, methods from transfer entropy
+  a. This may be split into periods that align as well as more appropriate time periods
+
+## Objective
+
+This Rmd will explore various complexity measures from single variables (heart rate, blood pressure, or respiration rate) over time. 
+    
+## Period Key
+Base (period 1)
+pre (period 2)
+task (period 3-5)
+post (period 6-12)
+
+## Some Background and Resources
+
+* Complexity testing techniques for time series data: A comprehensive literature review (Tang, 2015)
+    * https://www.sciencedirect.com/science/article/pii/S0960077915002817
+
+* An Overview of Heart Rate Variability Metrics and Norms
+    * https://www.ncbi.nlm.nih.gov/pmc/articles/PMC5624990/ 
+    
+* Nonlinear Methods Most Applied to Heart-Rate Time Series: A Review
+    * https://www.ncbi.nlm.nih.gov/pmc/articles/PMC7516766/ 
+    
+    
+Respiratory: https://neuropsychology.github.io/NeuroKit/examples/rsp_rrv/rsp_rrv.html   
+
+# Current thoughts
+
+* Periods 1-6 seem to be the most uniform (same amount of time, etc). Although we may just concatenate them, I feel that may be problematic. I think I am going to calculate each measure for the 6 periods 6-12 (post) (maybe all concatenated too?) and then take the arithmetic mean and use that value. Might be a problem because this is the recovery period. This is why I'll do all of 'post' as well all six individually. 
+* With EDA, period 11 seems the cleanest, so I will just use period 10 as I am working on the project, then do the average of all 6 later. 
+    
+# Packages
+
+```{r load_packages, echo = FALSE, message = FALSE}
+library(nonlinearTseries)
+library(CGManalyzer)
+#library(MSMVSampEn) # might have problems, see article
+
+#library(Rlibeemd) 
+
+library(plotly)
+library(tidyverse)
+
+```
+
+# Load and process data
+
+## Load Raw Data: Non-constant delta t (time interval)
+
+```{r load_raw_data, eval=FALSE}
+
+# For now, we will focus on heart rate.
+
+hr_raw <- read_csv("./data/data_from_email/hr_cleaned.csv")
+#bp_raw <- read_csv("./data/data_from_email/bp_cleaned.csv")
+rsp_raw <- read_csv("./data/data_from_email/rsp_cleaned.csv")
+#pt_cond_raw <- read_csv("./data/data_from_email/patient condition.csv")
+
+# Sample size
+length(unique(hr_raw))
+length(unique(bp_raw))
+length(unique(rsp_raw))
+
+hr_raw %>%
+  group_by(condition) %>%
+  summarise(UniqueSubjects = n_distinct(id)) 
+
+# Clean up the data and add column for time between beats
+hr_raw_final <- hr_raw %>% 
+  filter(condition %in% c("Control", "Deletion", "Mutation")) %>% 
+  mutate(rate = ifelse(rate > 150 | rate < 25, NA, rate)) %>% #Replace with NA if HR is > 150 or < 25 
+  mutate(delta_t  = pSec - lag(pSec)) %>% 
+  mutate(delta_t = ifelse(delta_t > 5 | delta_t < -5, NA, delta_t)) # get rid of the first data point (lag) and the unreasonable data points
+  
+
+hr_df <- hr_raw_final
+
+
+
+
+
+rm(hr_raw_final)
+
+# for future use
+id_cond_df <- hr_df %>% 
+  select(id, condition) %>% 
+  unique()
+
+```
+
+## Load Interpolated data: constant, measure-specific time interval
+
+```{r}
+#do this later
+```
+
+
+## Load Interpolated data: constant, aligned time interval (see TE)
+
+```{r load_interpolated_data}
+
+# saveRDS(id_to_group, "/Users/christinekuryla/Documents/A_Columbia_Research/MiSBIE/misbie/data/data_20240317old/id_to_group.RDS")
+# saveRDS(id_cond_df, "/Users/christinekuryla/Documents/A_Columbia_Research/MiSBIE/misbie/data/data_20240317old/id_cond_df.RDS")
+# saveRDS(comb_df_1to12, "/Users/christinekuryla/Documents/A_Columbia_Research/MiSBIE/misbie/data/data_20240317old/comb_df_1to12.RDS")
+# saveRDS(comb_df_tasks, "/Users/christinekuryla/Documents/A_Columbia_Research/MiSBIE/misbie/data/data_20240317old/comb_df_tasks.RDS")
+
+id_cond_df <- read_csv("/Users/christinekuryla/Documents/A_Columbia_Research/MiSBIE/misbie/data/pt_cond97.csv")
+id_to_group <- id_cond_df
+#id_to_group <- readRDS("/Users/christinekuryla/Documents/A_Columbia_Research/MiSBIE/misbie/data/data_20240317old/id_to_group.RDS")
+comb_df_1to12 <- readRDS("/Users/christinekuryla/Documents/A_Columbia_Research/MiSBIE/misbie/data/data_20240317old/comb_df_1to12.RDS")
+comb_df_tasks <- readRDS("/Users/christinekuryla/Documents/A_Columbia_Research/MiSBIE/misbie/data/data_20240317old/comb_df_tasks.RDS")
+
+comb_df_6_12 <- comb_df_1to12 %>% filter(period %in% 6:12) %>% mutate(period = factor(period))
+
+colnames(comb_df_1to12) == colnames(comb_df_tasks)
+
+comb_df <- rbind(comb_df_1to12, comb_df_tasks)
+
+comb_df_10 <- comb_df %>% filter(period == 10)
+comb_df_8 <- comb_df %>% filter(period == 8)
+
+table(comb_df$condition)
+
+```
+
+## Optional to save computational time
+
+```{r}
+entropy_summary <- read_csv("/Users/christinekuryla/Documents/A_Columbia_Research/MiSBIE/misbie/data/results/entropy_summary20240319.csv")
+hr_rhrv_summary <- read_csv("/Users/christinekuryla/Documents/A_Columbia_Research/MiSBIE/misbie/data/results/hr_rhrv_summary_20240319.csv")
+
+```
+
+```{r}
+
+idtocond_new <- pt_cond_cleaned %>% 
+  mutate(condition = case_match(pi_geneticdiagnosistype,
+                                0 ~ "Control",
+                                1 ~ "Mutation",
+                                2 ~ "Deletion")) %>% 
+  mutate(id = tolower(subject_id)) %>% 
+  select(id, condition)
+idtocond_new <- idtocond_new[1:97,]
+
+#write_csv(idtocond_new, "/Users/christinekuryla/Documents/A_Columbia_Research/MiSBIE/misbie/data/pt_cond97.csv")
+
+```
+
+
+## Cat
+
+```{r categories}
+
+base_df = comb_df %>% filter(period == 1) %>% arrange(id, period, interval)
+pre_df = comb_df %>% filter(period == 2) %>% arrange(id, period, interval)
+task_df = comb_df %>% filter(period == 3|period == 4|period == 5) %>% arrange(id, period, interval)
+post_df = comb_df %>% filter(period == 6|period == 7|period == 8|period == 9|period == 10|period == 11|period == 12) %>% arrange(id, period, interval)
+all_df = comb_df %>% arrange(id, period, interval)
+
+```
+
+# EDA
+
+## HR/RR/BP vs time
+
+```{r eda}
+colnames(comb_df)
+
+comb_df <- comb_df_6_12
+
+# HR, RR, BP vs time for all periods
+
+ggplotly(ggplot(comb_df, aes(x = interval, y = rate_hr, color = id)) +
+  geom_line() +
+  theme(legend.position = "none") +
+  labs(title = "Heart Rate") +
+  facet_wrap(~period))
+
+ggplotly(ggplot(comb_df, aes(x = interval, y = rate_rsp, color = id)) +
+  geom_line() +
+  theme(legend.position = "none") +
+  labs(title = "Respiration Rate") +
+  facet_wrap(~period))
+
+ggplotly(ggplot(comb_df, aes(x = interval, y = pval_bp, color = id)) +
+  geom_line() +
+  theme(legend.position = "none") +
+  labs(title = "Blood Pressure") +
+  facet_wrap(~period))
+
+
+ggplot(comb_df %>% filter(id != "mi027"), aes(x = interval, y = pval_bp, color = id)) +
+  geom_line() +
+  theme(legend.position = "none") +
+  labs(title = "Blood Pressure over Time in Collection Periods 6-12",
+       x = "Time (seconds)",
+       y = "Blood Pressure (mmHg)") +
+  facet_wrap(~period)
+
+
+
+```
+
+
+# Note
+
+Our prior knowledge of the experiment set up and the EDA shows us that the most homogenous (similar actions, same time frame) periods are 6-12, which are the "post" periods after the task. We will approach the data in the following ways:
+
+1. Throw all of the periods in and explore what that looks like.
+2. Look at metrics for periods 6-12.
+3. Average the metrics of 6-12 and use that as our global metric.
+  a. This is good because it seems to be the most homogeous group.
+  b. This is problematic because it is during the response to a stressor task, so they aren't exactly comparable. 
+
+# Functions for Metrics
+
+For ease of reference and reproducibility, we will create a function for each metric, even if it's just one line. 
+
+```{r}
+
+# For the following, we will be using the same parameters for hr, bp, and rsp. This may change in the future. 
+
+# Approximate and sample entropy from pracma
+  # https://search.r-project.org/CRAN/refmans/pracma/html/entropy.html
+
+metric_approx_entropy <- function(data_time_series) {
+   # data_time_series should be rate_hr, rate_rsp, and pval_bp
+   pracma::approx_entropy(data_time_series, edim = 2, r = 0.2*sd(data_time_series), elag = 1)
+ }
+
+metric_sample_entropy <- function(data_time_series) {
+   # data_time_series should be rate_hr, rate_rsp, and pval_bp
+   pracma::sample_entropy(data_time_series, edim = 2, r = 0.2*sd(data_time_series), tau = 1)
+}
+
+metric_te_old <- function(te_matrix, dir_a, dir_b){
+
+te <- RTransferEntropy::transfer_entropy(
+                te_matrix %>% ungroup %>% pull(dir_a),
+                te_matrix %>% ungroup %>% pull(dir_b),
+                 lx = 3,
+                 ly = 3
+                 )
+
+te_ab <- te$coef[1,1]
+
+return(te_ab)
+
+# te_ab <- te$coef[1,1] # te a -> b
+# se_ab <- te$coef[1,3] # se a -> b
+# p_ab <- te$coef[1,4] # pvalue a -> b
+# te_ba <- te$coef[2,1] # te b -> a
+# se_ba <- te$coef[2,3] # se b -> a
+# p_ba <- te$coef[2,4] # pvalue b -> a
+# 
+# return(c(te_ab = te_ab, 
+#          se_ab = se_ab,
+#          p_ab = p_ab,
+#          te_ba = te_ba,
+#          se_ba = se_ba,
+#          p_ba = p_ba
+#          ))
+}
+
+metric_te <- function(dir_a, dir_b){
+
+te <- RTransferEntropy::transfer_entropy(
+                dir_a,
+                dir_b,
+                 lx = 3,
+                 ly = 3
+                 )
+
+te_ab <- te$coef[1,1]
+
+return(te_ab)
+}
+
+test_te_fctn <- metric_te(comb_df_1to12 %>% filter(period == 8) %>% filter(id =="mi024"), "rate_hr", "pval_bp")
+
+metric_corr_dim <- function(data_time_series){
+#  library(nonlinearTseries)
+  df_ts <- data_time_series
+#old.par = par(mfrow = c(1, 2))
+
+# tau-delay estimation based on the autocorrelation function
+tau.acf = timeLag(df_ts, technique = "acf",
+                  lag.max = 100, do.plot = F)
+# tau-delay estimation based on the mutual information function
+tau.ami = timeLag(df_ts, technique = "ami", 
+                  lag.max = 100, do.plot = F)
+#par(old.par)
+
+#par(mfrow = c(1,1))
+
+# compute embedding dimension
+emb.dim = estimateEmbeddingDim(df_ts, time.lag = tau.ami,
+                               max.embedding.dim = 15)
+
+# phase space reconstruction
+#tak = buildTakens(df_ts,embedding.dim = emb.dim, time.lag = tau.ami)
+#scatter3D(tak[,1], tak[,2], tak[,3],
+#          main = "Reconstructed Phase Space",
+#          col = 1, type="o",cex = 0.3)
+
+# Estimations
+
+# Correlation dimension
+
+cd = corrDim(df_ts,
+             min.embedding.dim = emb.dim,
+             max.embedding.dim = emb.dim + 5,
+             time.lag = tau.ami, 
+             min.radius = 0.001, max.radius = 50,
+             n.points.radius = 40,
+             do.plot=FALSE)
+#plot(cd)
+cd.est = estimate(cd, regression.range=c(2,7),
+                  use.embeddings = 8:12)
+return(cd.est)
+}
+
+```
+
+
+# Approximate and sample entropy
+https://search.r-project.org/CRAN/refmans/pracma/html/entropy.html
+
+* These are for equally spaced timeseries 
+
+```{r approx_and_sample_entropy_pracma}
+library(pracma)
+
+test <- comb_df %>% filter(period == 1) %>% filter(id == "mi001")
+data <- pull(test, rate_hr)
+
+approx_entropy(pull(test, rate_hr), edim = 2, r = 0.2*sd(pull(test, rate_hr)), elag = 1)
+
+# DFA
+dfa <- nonlinearTseries::dfa(pull(test, rate_hr), dfaOrder = 1, do.plot = FALSE)
+estimate(dfa)
+
+# MSE
+# https://rdrr.io/cran/RespirAnalyzer/man/MSE.html 
+library(Rlibeemd)
+multiscale_entropy(data, scales = scales, method = "SampEn")
+
+
+test_te_fctn <- metric_te(comb_df_6_12 %>% filter(period == 8) %>% filter(id =="mi024"), rate_hr, pval_bp)
+
+entropy_summary_6_12 <- comb_df_6_12 %>% 
+  group_by(id, period) %>% 
+  na.omit() %>% 
+  summarize(hr_approx_entropy = metric_approx_entropy(rate_hr),
+           # bp_approx_entropy = metric_approx_entropy(pval_bp),
+          #  rsp_approx_entropy = metric_approx_entropy(rate_rsp),
+          #  hr_sample_entropy = metric_sample_entropy(rate_hr),
+          #  bp_sample_entropy = metric_sample_entropy(pval_bp),
+          #  rsp_sample_entropy = metric_sample_entropy(rate_rsp),
+            hr_corr_dim = metric_corr_dim(rate_hr)
+            ) %>% 
+  ungroup() %>% 
+  left_join(id_cond_df, by = "id") %>% 
+  mutate(condition = as.factor(condition)) %>% 
+  select(id, period, condition, everything())
+
+te_summary_1_12 <- comb_df_1to12 %>% 
+  group_by(id, period) %>% 
+  na.omit() %>% 
+  summarize(te_hr_bp = metric_te(rate_hr, pval_bp) ,
+            te_bp_hr = metric_te(pval_bp, rate_hr),
+            te_hr_rsp = metric_te(rate_hr, rate_rsp),
+            te_rsp_hr = metric_te(rate_rsp, rate_hr),
+            te_bp_rsp = metric_te(pval_bp, rate_rsp),
+            te_rsp_bp = metric_te(rate_rsp, pval_bp)
+            ) %>% 
+  ungroup() %>% 
+  left_join(id_cond_df, by = "id") %>% 
+  mutate(condition = as.factor(condition)) %>% 
+  select(id, period, condition, everything())
+
+write_csv(te_summary_1_12, "/Users/christinekuryla/Documents/A_Columbia_Research/MiSBIE/misbie/data/te_summary_1to12_20240329.csv")
+
+
+metric_summary <- comb_df %>% 
+  group_by(id, period) %>% 
+  na.omit() %>% 
+  summarize(hr_approx_entropy = pracma::approx_entropy(rate_hr, edim = 2, r = 0.2*sd(rate_hr), elag = 1),
+            bp_approx_entropy = pracma::approx_entropy(pval_bp, edim = 2, r = 0.2*sd(pval_bp), elag = 1),
+            rsp_approx_entropy = pracma::approx_entropy(rate_rsp, edim = 2, r = 0.2*sd(rate_rsp), elag = 1),
+            hr_sample_entropy = pracma::sample_entropy(rate_hr, edim = 2, r = 0.2*sd(rate_hr), tau = 1),
+            bp_sample_entropy = pracma::sample_entropy(pval_bp, edim = 2, r = 0.2*sd(pval_bp), tau = 1),
+            rsp_sample_entropy = pracma::sample_entropy(rate_rsp, edim = 2, r = 0.2*sd(rate_rsp), tau = 1),
+            ) %>% 
+  ungroup() %>% 
+  left_join(id_cond_df, by = "id") %>% 
+  mutate(condition = as.factor(condition)) %>% 
+  select(id, period, condition, everything())
+  
+#write_csv(entropy_summary, "/Users/christinekuryla/Documents/A_Columbia_Research/MiSBIE/misbie/data/results/entropy_summary20240319.csv")
+
+entropy_summary <- metric_summary %>% 
+  select(-condition) %>% 
+  left_join(id_cond_df, by = "id") %>% 
+  select(id, period, condition, everything())
+
+metric_summary <- entropy_summary %>% 
+  select(-condition, -period) %>% 
+  left_join(hr_rhrv_summary, by = "id") %>% 
+  select(id, period, condition, everything())
+
+t.test(data = entropy_summary %>% filter(condition != "Deletion"),
+       hr_approx_entropy ~ condition)
+t.test(data = entropy_summary %>% filter(condition != "Mutation"),
+       hr_approx_entropy ~ condition)
+t.test(data = entropy_summary %>% filter(condition != "Deletion"),
+       hr_sample_entropy ~ condition)
+t.test(data = entropy_summary %>% filter(condition != "Mutation"),
+       hr_sample_entropy ~ condition) 
+
+t.test(data = entropy_summary %>% filter(condition != "Deletion"),
+       bp_approx_entropy ~ condition)
+t.test(data = entropy_summary %>% filter(condition != "Mutation"),
+       bp_approx_entropy ~ condition)
+t.test(data = entropy_summary %>% filter(condition != "Deletion"),
+       bp_sample_entropy ~ condition)
+t.test(data = entropy_summary %>% filter(condition != "Mutation"),
+       bp_sample_entropy ~ condition) 
+
+t.test(data = entropy_summary %>% filter(condition != "Deletion"),
+       rsp_approx_entropy ~ condition)
+t.test(data = entropy_summary %>% filter(condition != "Mutation"),
+       rsp_approx_entropy ~ condition)
+t.test(data = entropy_summary %>% filter(condition != "Deletion"),
+       rsp_sample_entropy ~ condition)
+t.test(data = entropy_summary %>% filter(condition != "Mutation"),
+       rsp_sample_entropy ~ condition) 
+
+
+library(lme4)
+mod.RI <- lmer(bp_sample_entropy ~ condition +              # exposure
+                      (1|id) +                       # random intercept for each subject
+                      (1|period),
+                    data = entropy_summary) 
+summary(mod.RI)
+summary(mod.RI)$coefficients
+
+```
+
+
+## Histograms
+
+```{r metric_histograms}
+
+# Get names of metrics 
+metric_names <- colnames(entropy_summary %>% select(-id, -period, -condition))
+
+library(ggplot2)
+library(dplyr)
+
+library(ggplot2)
+library(dplyr)
+library(tools)
+
+histogram_plot <- function(metric){
+  
+  metric_sym <- rlang::sym(metric) # Convert the string metric to a symbol
+  title_str <- gsub("_", " ", metric) # Make the title pretty
+  title_metric <- toTitleCase(title_str)
+
+  p <- entropy_summary %>% 
+    ggplot(aes(x = !!metric_sym)) +
+    labs(title = paste(title_metric, "Histogram")) +
+    geom_density(alpha = 0.5)
+  plot(p)
+}
+
+histogram_plot_condition <- function(metric){
+  # Convert the string metric to a symbol
+  metric_sym <- rlang::sym(metric)
+  title_str <- gsub("_", " ", metric)
+  title_metric <- toTitleCase(title_str)
+
+  p <- entropy_summary %>% 
+    ggplot(aes(x = !!metric_sym, fill = condition)) +
+    labs(title = paste(title_metric, "Histogram by Condition")) +
+    geom_density(alpha = 0.5)
+  plot(p)
+}
+
+
+
+lapply(metric_names, histogram_plot)
+lapply(metric_names, histogram_plot_condition)
+
+for (metric in metric_names){
+  histogram_plot(metric)
+}
+
+
+# Combine them into one figure
+
+metric_names <- colnames(entropy_summary %>% select(-id, -period, -condition))
+metric_names <- colnames(hr_rhrv_summary %>% ungroup %>% select(-id, -period, -condition))
+metric_names <- colnames(te_summary %>% select(-id, -period, -condition))
+metric_names <- colnames(rsp_hr_dt_summary %>% ungroup %>% select(-id, -period, -condition))
+
+#long_summary <- hr_rhrv_summary %>% 
+ # mutate(test = scale(hr_IRRR))
+
+# long_summary <- hr_rhrv_summary %>% 
+# long_summary <- entropy_summary %>% 
+# long_summary <- te_summary %>% 
+long_summary <- rsp_hr_dt_summary %>% 
+  pivot_longer(cols = metric_names,
+               names_to = "metric",
+               values_to = "value")
+
+# Histograms
+long_summary %>% ggplot(aes(x = value)) +
+  geom_histogram() +
+  facet_wrap(~metric, nrow = 3) +
+  labs(title = "Time Variability Metrics")
+
+# Density plots
+long_summary %>% ggplot(aes(x = value)) +
+  geom_density(alpha = 0.5) +
+  facet_wrap(~metric, nrow = 3) +
+  labs(title = "HRV Metrics")
+
+# Density plots by condition
+long_summary %>% ggplot(aes(x = value, fill = condition)) +
+  geom_density(alpha = 0.5) +
+  facet_wrap(~metric, nrow = 3) +
+  labs(title = "Time Variability Metrics")
+
+```
+
+
+## Entropy Plots over Period
+
+```{r metric_plots}
+
+metric_plot_line <- function(metric, fig_title){
+combined_summary %>% 
+  ggplot(aes(x = as.numeric(period), y = {{metric}}, color = condition)) +
+  geom_point() +
+  labs(title = fig_title,
+       x = "Time Period") +
+  geom_line()
+}
+
+metric_plot_average_line <- function(metric, fig_title){
+  combined_summary %>% 
+    ggplot(aes(x = as.numeric(period), y = {{metric}}, color = condition)) +
+    stat_summary(fun = mean, geom = "point", size = 3) +  # Plot points at the mean of each group
+    stat_summary(fun = mean, geom = "line", size = 1) +   # Connect means with lines
+    labs(title = fig_title,
+         x = "Time Period")
+}
+
+
+metric_plot_average_line(metric = hr_approx_entropy, fig_title = "Heart Rate Approx Entropy (All Periods)")
+
+metric_plot_loess <- function(metric, fig_title){
+combined_summary %>% 
+  ggplot(aes(x = as.numeric(period), y = {{metric}}, color = condition)) +
+  geom_point() +
+  labs(title = fig_title,
+       x = "Time Period") +
+  geom_smooth()
+}
+
+for (metric in metric_names){
+  entropy_plots({{metric}})
+}
+
+entropy_plots(metric = hr_approx_entropy, fig_title = "Heart Rate Approx Entropy (All Periods)")
+entropy_plots(rsp_approx_entropy, "Rsp Rate Approx Entropy (All Periods)")
+entropy_plots(bp_approx_entropy, "BP Approx Entropy (All Periods)")
+entropy_plots(hr_sample_entropy, "Heart Rate Sample Entropy (All Periods)")
+entropy_plots(rsp_sample_entropy, "Rsp Rate Sample Entropy (All Periods)")
+entropy_plots(bp_sample_entropy, "BP Sample Entropy (All Periods)")
+
+
+
+metric_plot_loess(metric = hr_approx_entropy, fig_title = "Heart Rate Approx Entropy (All Periods)")
+metric_plot_average_line(metric = hr_approx_entropy, fig_title = "Heart Rate Approx Entropy (All Periods)")
+
+metric_variables <- colnames(combined_summary)[4:dim(combined_summary)[2]]
+
+for (metric in metric_variables){
+  plot <- metric_plot_average_line(metric = {{metric}}, fig_title = paste0(metric, " (Averaged Per Condition)"))
+  print(plot)
+}
+
+metric_plot_average_line(metric = rsp_t_sd, fig_title = "Rsp t sd (All Periods)")
+
+
+metric_plot_average_line_2 <- function(metric, fig_title) {
+  ggplot(combined_summary, aes_string(x = "period", y = metric, group = "condition", color = "condition")) +
+    geom_point(alpha = 0.4) +
+    stat_summary(fun.y = mean, geom = "point", size = 3) +
+    stat_summary(fun.y = mean, geom = "line", aes(group = condition), size = 1) +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+    labs(title = fig_title, x = "Time Period")
+}
+
+metric_plot_loess_2 <- function(metric, fig_title) {
+  ggplot(combined_summary, aes_string(x = "period", y = metric, group = "condition", color = "condition")) +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+    labs(title = fig_title, x = "Time Period") +
+    geom_smooth()
+}
+
+
+for (metric in metric_variables[4]) {
+  plot_line <- metric_plot_average_line_2(metric, fig_title = paste0(metric, " (Averaged Per Condition)"))
+#  plot_loess <- metric_plot_loess_2(metric, fig_title = paste0(metric, " (Smoothed)"))
+  
+  print(plot_line)
+#  print(plot_loess)
+  
+}
+
+for (metric in metric_variables) {
+  plot_line <- metric_plot_average_line_2(metric, fig_title = paste0(metric, " (Averaged Per Condition)"))
+#  plot_loess <- metric_plot_loess_2(metric, fig_title = paste0(metric, " (Smoothed)"))
+
+  # Make sure to print the plot if you're not directly viewing it, as ggsave saves the last plot that was displayed
+  print(plot_line)
+  ggsave(filename = paste0("/Users/christinekuryla/Documents/A_Columbia_Research/MiSBIE/misbie/data/results/time_plots/line_points_", metric, "_20240319.png"), plot = plot_line)
+
+#  print(plot_loess)
+#  ggsave(filename = paste0("/Users/christinekuryla/Documents/A_Columbia_Research/MiSBIE/misbie/data/results/time_plots/loess_", metric, "_20240319.png"), plot = plot_loess)
+}
+
+
+
+
+
+#######
+
+metric_plot_loess <- function(metric, fig_title){
+  # Convert string to symbol and evaluate it within the data frame context
+  data_for_metric <- combined_summary %>%
+    filter(!is.na(.data[[metric]]))  # Filtering NA values for the specified metric
+
+  # Compute quantiles for dynamic y-limits
+  q_low <- quantile(data_for_metric[[metric]], probs = 0.05, na.rm = TRUE)
+  q_high <- quantile(data_for_metric[[metric]], probs = 0.95, na.rm = TRUE)
+  
+  # Add some padding
+  padding <- (q_high - q_low) * 0.1
+  ylims <- c(q_low - padding, q_high + padding)
+
+  # Generate plot
+  ggplot(data_for_metric, aes(x = as.numeric(period), y = .data[[metric]], color = condition)) +
+    stat_summary(fun.y = mean, geom = "point", size = 3) +
+    stat_summary(fun.y = mean, geom = "line", size = 1) +
+    labs(title = fig_title, x = "Time Period") +
+    scale_y_continuous(limits = ylims)  # Set dynamic y-axis limits
+}
+
+for (metric in metric_variables) {
+  metric_plot_loess(metric, fig_title = paste0(metric, " (Averaged Per Condition)"))
+}
+
+```
+
+
+# Analysis
+
+## Summary Statistics
+```{r metric_summary_stats}
+
+# Define your custom theme
+custom_theme <- theme_minimal() + 
+              #  theme(text = element_text(family = "Arial", color = "#333333")) +
+                scale_color_manual(values = c("#1b9e77", "#d95f02", "#7570b3"))
+
+# Set the custom theme as the default for all ggplot objects
+theme_set(custom_theme)
+
+library(dplyr)
+library(knitr)
+
+# ICC
+ICCest(id, scale(hr_rmssd), data = hr_summary_all)
+ICCest(period, scale(hr_rmssd), data = hr_summary_all)
+ICCest(condition, scale(hr_rmssd), data = hr_summary_all)
+
+metric_vector <- c(hr_approx_entropy, bp_approx_entropy, rsp_approx_entropy,
+                     hr_sample_entropy, bp_sample_entropy, rsp_sample_entropy)
+
+summary_table_all <- metric_summary %>%
+  group_by(period, condition) %>%
+  summarise(across(c(hr_approx_entropy, bp_approx_entropy, rsp_approx_entropy,
+                     hr_sample_entropy, bp_sample_entropy, rsp_sample_entropy),
+                   list(mean = mean, 
+                        sd = sd,
+                        iqr = IQR), na.rm = TRUE)) %>%
+  ungroup()
+
+# View the summary table
+kable(summary_table)
+
+metric_names <- c("hr_approx_entropy", "bp_approx_entropy", "rsp_approx_entropy",
+                     "hr_sample_entropy", "bp_sample_entropy", "rsp_sample_entropy")
+
+rsp_hr_dt_summary %>% pivot_longer(cols = metric_names,
+                                names_to = "metric",
+                                values_to = "value") %>% 
+  ggplot(aes(x = metric, y = value, color = condition)) +
+  geom_violin() +
+  labs(title = "Time Variability Violin Plot") +
+ # scale_c
+  theme(axis.text.x = element_text(angle = 45))
+  
+##### Correlation
+  
+  library(reshape2)
+
+correlation_matrix <-  cor(metric_summary %>% select(metric_names))
+  
+melted_correlation_matrix <- melt(correlation_matrix)
+ggplot(melted_correlation_matrix, aes(Var1, Var2, fill = value)) +
+    geom_tile() +
+    scale_fill_gradient2(low = "blue", mid = "white", high = "red", midpoint = 0) +
+    theme_minimal() +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+    labs(fill = "Correlation")
+
+ggplot(melted_correlation_matrix, aes(Var1, Var2, fill = value)) +
+    geom_tile() +  # Create the tiles for heatmap
+    geom_text(aes(label = sprintf("%.2f", value)), color = "black", size = 3) +  # Add text labels
+    scale_fill_gradient2(low = "blue", mid = "white", high = "red", midpoint = 0) +  # Set the color gradient
+    theme_minimal() +  # Use a minimal theme
+    theme(axis.text.x = element_text(angle = 45, hjust = 1),  # Rotate x-axis labels
+          axis.title = element_blank()) +  # Remove axis titles
+    labs(fill = "Correlation")  # Label the legend
+
+
+```
+
+## EDA Visualizations -- Heat Map
+
+```{r}
+
+library(dplyr)
+library(knitr)
+
+# Calculate mean and standard deviation for each measure across conditions and periods
+summary_table <- combined_summary %>%
+  group_by(period, condition) %>%
+  summarise(across(c(hr_approx_entropy, bp_approx_entropy, rsp_approx_entropy,
+                     hr_sample_entropy, bp_sample_entropy, rsp_sample_entropy),
+                   list(mean = mean, sd = sd), na.rm = TRUE)) %>%
+  ungroup()
+
+# View the summary table
+knitr::kable(summary_table)
+library(ggplot2)
+library(reshape2)
+
+
+# Prepare the data for heatmap: we'll use hr_approx_entropy as an example
+heatmap_data <- combined_summary %>%
+  select(id, period, condition, hr_approx_entropy) %>%
+  group_by(period, condition) %>%
+  summarise(mean_hr_approx_entropy = mean(hr_approx_entropy, na.rm = TRUE)) %>%
+  ungroup()
+
+# Reshape the data for the heatmap
+heatmap_matrix <- dcast(heatmap_data, period ~ condition, value.var = "mean_hr_approx_entropy")
+
+# Create the heatmap
+ggplot(heatmap_data, aes(x = condition, y = period, fill = mean_hr_approx_entropy)) +
+  geom_tile() +
+  scale_fill_gradient(low = "blue", high = "red") +
+  labs(title = paste0("Heatmap of HR Approx Entropy"), x = "Condition", y = "Period") +
+  theme_minimal()
+
+# bp_approx_entropy
+# Prepare the data for heatmap
+heatmap_data <- combined_summary %>%
+  select(id, period, condition, bp_approx_entropy) %>%
+  group_by(period, condition) %>%
+  summarise(mean_bp_approx_entropy = mean(bp_approx_entropy, na.rm = TRUE)) %>%
+  ungroup()
+
+# Reshape the data for the heatmap
+heatmap_matrix <- dcast(heatmap_data, period ~ condition, value.var = "mean_bp_approx_entropy")
+
+# Create the heatmap
+ggplot(heatmap_data, aes(x = condition, y = period, fill = mean_bp_approx_entropy)) +
+  geom_tile() +
+  scale_fill_gradient(low = "blue", high = "red") +
+  labs(title = paste0("Heatmap of BP Approx Entropy"), x = "Condition", y = "Period") +
+  theme_minimal()
+
+# rsp_approx_entropy
+# Prepare the data for heatmap
+heatmap_data <- combined_summary %>%
+  select(id, period, condition, rsp_approx_entropy) %>%
+  group_by(period, condition) %>%
+  summarise(mean_rsp_approx_entropy = mean(rsp_approx_entropy, na.rm = TRUE)) %>%
+  ungroup()
+
+# Reshape the data for the heatmap
+heatmap_matrix <- dcast(heatmap_data, period ~ condition, value.var = "mean_rsp_approx_entropy")
+
+# Create the heatmap
+ggplot(heatmap_data, aes(x = condition, y = period, fill = mean_rsp_approx_entropy)) +
+  geom_tile() +
+  scale_fill_gradient(low = "blue", high = "red") +
+  labs(title = paste0("Heatmap of Resp Approx Entropy"), x = "Condition", y = "Period") +
+  theme_minimal()
+
+
+
+# function
+
+metric_heatmap <- function(metric){
+  
+ # metric <-  {{metric}}
+ # fig_title <- paste0(metric, " (Averaged Per Condition)")
+  
+  # Prepare the data for heatmap
+heatmap_data <- combined_summary %>%
+ # filter(!is.na(.data[[metric]])) %>% 
+  select(id, period, condition, .data[[metric]]) %>%
+  group_by(period, condition) %>%
+  summarise(mean_metric = mean(.data[[metric]], na.rm = TRUE)) %>%
+  ungroup()
+
+# Reshape the data for the heatmap
+#heatmap_matrix <- dcast(heatmap_data, period ~ condition, value.var = "mean_metric")
+
+# Create the heatmap
+ggplot(heatmap_data, aes_string(x = "condition", y = "period", fill = "mean_metric")) +
+  geom_tile() +
+  scale_fill_gradient(low = "blue", high = "red") +
+  labs(title = paste0("Heatmap of ", metric), x = "Condition", y = "Period") +
+  theme_minimal()
+}
+
+
+metric_heatmap("bp_approx_entropy")
+
+library(dplyr)
+library(ggplot2)
+library(reshape2)  # For dcast
+
+metric_heatmap <- function(metric){
+  
+  # Assuming 'combined_summary' is a dataframe available in your environment
+  # Prepare the data for heatmap
+  heatmap_data <- combined_summary %>%
+    filter(!is.na(all_of(metric))) %>%  # Updated to use all_of() for safe column selection
+    select(id, period, condition, all_of(metric)) %>%
+    group_by(period, condition) %>%
+    summarise(mean_metric = mean(.data[[metric]], na.rm = TRUE), .groups = 'drop')
+
+  # Reshape the data for the heatmap
+  heatmap_matrix <- dcast(heatmap_data, period ~ condition, value.var = "mean_metric")
+
+  # Check if 'condition' and 'period' are in the columns of heatmap_matrix
+  # if (!("condition" %in% names(heatmap_matrix)) || !("period" %in% names(heatmap_matrix))) {
+  #   stop("The reshaped data does not contain 'condition' or 'period' columns. Please check your data.")
+  # }
+
+  # Create the heatmap
+  ggplot(heatmap_data, aes_string(x = "condition", y = "period", fill = "mean_metric")) +
+    geom_tile() +
+    scale_fill_gradient(low = "blue", high = "red") +
+    labs(title = paste0("Heatmap of ", metric), x = "Condition", y = "Period") +
+    theme_minimal()
+
+}
+
+# Example usage:
+# metric_heatmap("bp_approx_entropy")
+
+for (metric in metric_variables) {
+  plot_heatmap <- metric_heatmap(metric)
+
+  # Make sure to print the plot if you're not directly viewing it, as ggsave saves the last plot that was displayed
+  print(plot_heatmap)
+#  ggsave(filename = paste0("/Users/christinekuryla/Documents/A_Columbia_Research/MiSBIE/misbie/data/results/time_plots/heatmap_", metric, "_20240319.png"), plot = plot_line)
+}
+
+```
+
+
+# Heart and Respiration Variability Metrics
+
+## rmssd and sd
+
+```{r hr_rsp_rmssd_sd, eval = FALSE}
+
+# Variability
+
+# RMSSD --- root mean square of succesive differences
+rmssd <- function(data_delta_t){
+  sq <- data_delta_t^2
+  avgofsq <- mean(sq)
+  rmssd <- sqrt(avgofsq)
+  return(rmssd)
+}
+
+# PNN50 --- Percentage of successive RR intervals that differ by more than 50 ms
+pnn50 <- function(data_delta_t){
+  under_50ms = 0
+  over_50ms = 0
+  for (i in 1:(length(data_delta_t) - 1)) {
+    if(abs(data_delta_t[i] - data_delta_t[i+1]) >= 0.05){
+      over_50ms = over_50ms + 1
+    } else {
+      under_50ms = under_50ms + 1
+    }
+  }
+  percent = over_50ms / (over_50ms + under_50ms)
+  return(percent)
+}
+#pnn50(dt_test)
+
+sdrr <- function(data_delta_t){
+  sd(data_delta_t)
+}
+
+rsp_df <- rsp_raw #this might be bad
+
+hr_df_dt <- hr_df %>% 
+  ungroup() %>% 
+  mutate(delta_t_hr = pSec - lag(pSec)) %>% 
+  mutate(delta_t_hr = if_else(abs(delta_t_hr) > 3, NA, delta_t_hr)) 
+rsp_df_dt <- rsp_df %>% 
+  ungroup() %>% 
+  mutate(delta_t_rsp_p = pSec - lag(pSec),
+         delta_t_rsp_t = tSec - lag(tSec)) %>% 
+  mutate(delta_t_rsp_p = if_else(abs(delta_t_rsp_p) > 20, NA, delta_t_rsp_p)) %>% 
+  mutate(delta_t_rsp_t = if_else(abs(delta_t_rsp_t) > 20, NA, delta_t_rsp_t)) 
+
+hr_summary <- hr_df_dt %>% 
+  select(-"condition") %>% 
+  group_by(id, period) %>% 
+  na.omit() %>% 
+  summarize(#hr_dt_mean = mean(delta_t_hr),
+            #hr_dt_sd = sd(delta_t_hr),
+            hr_rmssd = rmssd(delta_t_hr),
+         #   hr_pnn50 = pnn50(delta_t_hr),
+            hr_sdrr = sd(delta_t_hr)) %>% 
+  ungroup() %>% 
+  left_join(id_cond_df, by = "id") %>% 
+  mutate(condition = as.factor(condition))
+
+rsp_summary <- rsp_df_dt %>% 
+  select(-"condition") %>% 
+  group_by(id, period) %>% 
+  na.omit() %>% 
+  summarize(rsp_p_rmssd = rmssd(delta_t_rsp_p),
+            rsp_t_rmssd = rmssd(delta_t_rsp_t),
+            #pnn50 analog?
+            rsp_p_sd = sd(delta_t_rsp_p, na.rm = TRUE),
+            rsp_t_sd = sd(delta_t_rsp_t, na.rm = TRUE)) %>% 
+  ungroup() %>% 
+  left_join(id_cond_df, by = "id") %>% 
+  mutate(condition = as.factor(condition))
+
+rsp_hr_dt_summary <- full_join(hr_summary, rsp_summary, by = c("id", "condition", "period")) %>% 
+  select("id", "period", "condition", everything()) %>% 
+  filter(id != "mi031") 
+
+#write_csv(rsp_hr_dt_summary, "/Users/christinekuryla/Documents/A_Columbia_Research/MiSBIE/misbie/data/results/rsp_hr_dt_summary_20240417.csv")
+
+
+rsp_hr_dt_summary_612 <- rsp_hr_dt_summary %>% 
+  filter(period %in% 6:12)
+
+hist(hr_summary$hr_dt_sd)
+hist(hr_summary$hr_dt_mean)
+hist(hr_summary$hr_rmssd)
+hist(hr_summary$hr_pnn50)
+
+
+# t-test for hr delta t sd
+t.test(data = hr_summary %>% filter(condition == "Control" | condition == "Mutation"), hr_dt_sd ~ condition)
+t.test(data = hr_summary %>% filter(condition == "Control" | condition == "Deletion"), hr_dt_sd ~ condition)
+t.test(data = hr_summary %>% filter(condition == "Mutation" | condition == "Deletion"), hr_dt_sd ~ condition)
+
+# t-test for hr delta t mean
+t.test(data = hr_summary %>% filter(condition == "Control" | condition == "Mutation"), hr_dt_mean ~ condition)
+t.test(data = hr_summary %>% filter(condition == "Control" | condition == "Deletion"), hr_dt_mean ~ condition)
+t.test(data = hr_summary %>% filter(condition == "Mutation" | condition == "Deletion"), hr_dt_mean ~ condition)
+
+# t-test for hr rmssd
+t.test(data = hr_summary %>% filter(condition == "Control" | condition == "Mutation"), hr_rmssd ~ condition)
+t.test(data = hr_summary %>% filter(condition == "Control" | condition == "Deletion"), hr_rmssd ~ condition)
+t.test(data = hr_summary %>% filter(condition == "Mutation" | condition == "Deletion"), hr_rmssd ~ condition)
+
+# t-test for hr pnn50
+t.test(data = hr_summary %>% filter(condition == "Control" | condition == "Mutation") %>% filter(period %in% 1:12), hr_pnn50 ~ condition)
+t.test(data = hr_summary %>% filter(condition == "Control" | condition == "Deletion"), hr_pnn50 ~ condition)
+t.test(data = hr_summary %>% filter(condition == "Mutation" | condition == "Deletion"), hr_pnn50 ~ condition)
+
+#hr_summary <- hr_summary_all %>% filter(period == 2)
+
+# Wilcoxon rank sum test
+wilcox.test(data = hr_summary %>% filter(condition == "Control" | condition == "Mutation"), hr_pnn50 ~ condition)
+wilcox.test(data = hr_summary %>% filter(condition == "Control" | condition == "Deletion"), hr_pnn50 ~ condition)
+wilcox.test(data = hr_summary %>% filter(condition == "Deletion" | condition == "Mutation"), hr_pnn50 ~ condition)
+
+wilcox.test(data = hr_summary %>% filter(condition == "Control" | condition == "Mutation") %>% filter(period == "8"),
+            hr_pnn50 ~ condition)
+
+```
+
+
+```{r}
+
+pca_prep <- hr_summary %>% 
+  pivot_wider(names_from = period,
+              values_from = hr_dt_sd, # hr_rmssd, hr_dt_mean, hr_dt_sd
+              id_cols = id) %>% 
+  filter(!(id %in% c("mi014","mi031","mi042"))) %>% 
+  column_to_rownames(var = "id") %>% 
+  select(-C3, -Acquisition) %>% 
+  na.omit() 
+
+# pca_prep <- hr_summary %>% 
+#   pivot_wider(names_from = id,
+#               values_from = hr_dt_sd, # hr_rmssd, hr_dt_mean, hr_dt_sd
+#               id_cols = period) %>% 
+#  # filter(!(id %in% c("mi014","mi031","mi042"))) %>% 
+#   column_to_rownames(var = "period") %>% 
+# #  select(-C3, -Acquisition) %>% 
+#   na.omit() 
+
+pca_result <- prcomp(pca_prep, center = TRUE, scale = TRUE)
+view(pca_result)
+loadings(pca_result)
+
+id_to_group <- hr_summary %>% 
+  select(id, condition) %>% 
+  unique()
+pca_id_to_group <- id_to_group %>% 
+  filter(id %in% row.names(pca_prep))
+
+# loading library 
+library(ggfortify) 
+pca_plot <- autoplot(pca_result, 
+						data = pca_id_to_group, 
+						colour = 'condition') 
+
+pca_plot
+
+```
+
+
+
+## https://cran.r-project.org/web/packages/fractalRegression/fractalRegression.pdf 
+
+# Sample Entropy
+
+* A comprehensive comparison and overview of R packages for calculating sample entropy (Chen 2019)
+  * https://academic.oup.com/biomethods/article/4/1/bpz016/5634143 
+
+
+# Multiscale Entropy (MSE)
+
+```{r}
+
+
+```
+
+
+```{r}
+hr_summary_all <- hr_summary_all %>% filter(!(period %in% c("Acquisition", "C3", "5")))
+
+# ICC
+ICCest(id, scale(hr_rmssd), data = hr_summary_all)
+ICCest(period, scale(hr_rmssd), data = hr_summary_all)
+ICCest(condition, scale(hr_rmssd), data = hr_summary_all)
+
+ICCest(id, scale(hr_dt_sd), data = hr_summary_all)
+ICCest(period, scale(hr_dt_sd), data = hr_summary_all)
+ICCest(condition, scale(hr_dt_sd), data = hr_summary_all)
+
+ICCest(id, scale(hr_dt_mean), data = hr_summary_all)
+ICCest(period, scale(hr_dt_mean), data = hr_summary_all)
+ICCest(condition, scale(hr_dt_mean), data = hr_summary_all)
+
+ICCest(id, scale(hr_pnn50), data = hr_summary_all)
+ICCest(period, scale(hr_pnn50), data = hr_summary_all)
+ICCest(condition, scale(hr_pnn50), data = hr_summary_all)
+```
+
+
+```{r}
+# To easily look at output
+coeff_md_vs_control <- function(model){
+  
+beta.RI.deletion <- summary(model)$coefficients[2,1] #[(c+1),1]
+se.RI.deletion   <- summary(model)$coefficients[2,2] #[(c+1),2]
+lci.RI.deletion  <- beta.RI.deletion - 1.96*se.RI.deletion
+uci.RI.deletion  <- beta.RI.deletion + 1.96*se.RI.deletion
+coef.RI.deletion <- paste0(round(beta.RI.deletion,3), " (95% CI: ", round(lci.RI.deletion,3), 
+                     ", ", round(uci.RI.deletion,3), ")")
+coef.RI.deletion 
+
+beta.RI.mutation <- summary(model)$coefficients[3,1] #[(c+1),1]
+se.RI.mutation   <- summary(model)$coefficients[3,2] #[(c+1),2]
+lci.RI.mutation  <- beta.RI.mutation - 1.96*se.RI.mutation
+uci.RI.mutation  <- beta.RI.mutation + 1.96*se.RI.mutation
+coef.RI.mutation <- paste0(round(beta.RI.mutation,3), " (95% CI: ", round(lci.RI.mutation,3), 
+                     ", ", round(uci.RI.mutation,3), ")")
+coef.RI.mutation 
+  
+output_string <- paste0("Deletion vs Control: ", coef.RI.deletion, 
+                        "\n", "Mutation vs Control: ", coef.RI.mutation)
+
+cat(output_string)
+
+}
+```
+
+
+```{r}
+mod.RI <- lmer(hr_pnn50 ~ condition +              # exposure
+                 #     period +
+                 (1|period) + #
+                      (1|id),                       # random intercept for each subject
+                    data = hr_summary_all) 
+summary(mod.RI)
+summary(mod.RI)$coefficients
+
+
+beta.RI.pm <- summary(mod.RI)$coefficients[3,1]
+se.RI.pm   <- summary(mod.RI)$coefficients[3,2]
+lci.RI.pm  <- beta.RI.pm - 1.96*se.RI.pm
+uci.RI.pm  <- beta.RI.pm + 1.96*se.RI.pm
+
+coef.RI.pm <- paste0(round(beta.RI.pm,3), " (95% CI: ", round(lci.RI.pm,3), 
+                     ", ", round(uci.RI.pm,3), ")")
+coef.RI.pm 
+
+
+
+```
+
+
+
+```{r}
+
+# This is what happens when we don't use mixed models
+summary(lm(scale(hr_pnn50) ~ condition, data = hr_summary_all))
+summary(lm(scale(hr_rmssd) ~ condition + period, data = hr_summary_all))
+summary(lm(scale(hr_dt_sd) ~ condition, data = hr_summary_all))
+summary(lm(scale(hr_dt_mean) ~ condition, data = hr_summary_all))
+
+mod.RI <- lmer(scale(hr_pnn50) ~ condition +   
+                 #     period +
+                 (1|period) + #
+                      (1|id),     # random intercept for each subject
+                    data = hr_summary_all) 
+summary(mod.RI)
+summary(mod.RI)$coefficients
+coeff_md_vs_control(mod.RI)
+
+
+mod_ri_pnn50 <- lmer(scale(hr_pnn50) ~ condition +   
+                 (1|period) + (1|id),     
+                 data = hr_summary_all) 
+summary(mod_ri_pnn50)
+summary(mod_ri_pnn50)$coefficients
+coeff_md_vs_control(mod_ri_pnn50)
+
+mod_ri_rmssd <- lmer(scale(hr_rmssd) ~ condition +   
+                 (1|period) + (1|id),     
+                 data = hr_summary_all) 
+summary(mod_ri_rmssd)
+summary(mod_ri_rmssd)$coefficients
+coeff_md_vs_control(mod_ri_rmssd)
+
+mod_ri_sd <- lmer(scale(hr_dt_sd) ~ condition +   
+                 (1|period) + (1|id),     
+                 data = hr_summary_all) 
+coeff_md_vs_control(mod_ri_sd)
+
+mod_ri_pnn50 <- lmer(scale(hr_pnn50) ~ condition +   
+                 (1|period) + (1|id),     
+                 data = hr_summary_all) 
+coeff_md_vs_control(mod_ri_pnn50)
+
+```
+
+
+```{r post}
+
+# Post is period 6-12 so I want to try to combine them
+
+hr_df_post <- hr_df %>% 
+  filter(period %in% c("6", "7", "8", "9", "10", "11", "12")) %>% 
+  mutate(period = as.numeric(period)) %>% 
+  arrange(id, period, pSec)
+
+hr_summary_post <- hr_df_post %>% 
+  group_by(id) %>% 
+  na.omit() %>% 
+  summarize(hr_dt_mean = mean(delta_t),
+            hr_dt_sd = sd(delta_t),
+            hr_rmssd = rmssd(delta_t),
+            hr_pnn50 = pnn50(delta_t)) %>% 
+  ungroup() %>% 
+  left_join(id_cond_df, by = "id") %>% 
+  mutate(condition = as.factor(condition))
+
+```
+
+```{r}
+
+hr_summary_all %>% 
+  ggplot(aes(x = hr_pnn50)) + 
+  geom_boxplot(aes(color = condition), alpha = 0.2, outlier.shape = NA) +
+  #geom_jitter(aes(color = condition), size=0.4, alpha=0.6) +
+  facet_grid(~ period, scales = "free") #+
+  
+ # theme(axis.text.x=element_blank(),axis.ticks.x=element_blank()) +             
+#  theme(strip.text.x = element_text(size = 7), strip.text.y = element_text(size = 7))  # Change font size
+
+
+```
+
+```{r}
+
+library(frac)
+
+```
+
