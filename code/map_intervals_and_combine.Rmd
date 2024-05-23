@@ -1,5 +1,5 @@
 ---
-title: "Combine Metrics"
+title: "Map Intervals and Combine Metrics"
 author: "Christine Lucille Kuryla"
 date: "2024-05-22"
 output: html_document
