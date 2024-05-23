@@ -1,0 +1,680 @@
+---
+title: "MISBiE -- Load and Process Raw Data Files"
+author: "Christine Lucille Kuryla"
+date: "2024-05-22"
+output: html_document
+---
+
+# Introduction
+
+This Rmd goes through the process of loading the raw data in the form it is received and putting it in one df for each HR, RR, BP. It also calculates the heart and respiration rate and includes them in the dfs. It writes the dfs out as csv and in the comments keeps track of which files are missing (which subjects/periods do not have data available). Finally, the end of the document explains how the rates were calculated from the respiration and heart data (Claude was used to generate this explanation). 
+
+This R Markdown document processes raw data files for the MISBiE study. The main steps are:
+
+1. Load necessary packages and set data paths.
+2. Define periods, subject IDs, and file types.
+3. Check for missing or incorrectly formatted data files. Specific issues are noted for certain subjects and periods.
+4. Gather condition information (Mutation, Deletion, Control) for each subject ID.
+5. Create a respiration rate dataframe (rr_raw) by reading in "_rsp.csv" files, calculating rates, and combining data for all subjects and periods. Missing files are printed.
+6. Similarly, create a heart rate dataframe (hr_raw) using "_rttimes.csv" files.
+7. Create a blood pressure dataframe (bp_raw) using "_bptimes.csv" files. No rate calculations are done for BP.
+
+For each dataframe, the number of unique subjects per condition is summarized. Some periods are missing data.
+
+The raw dataframes are written out to CSV files.
+
+Throughout the process, specific missing files and subjects are tracked. Two subjects (mi014 and mi075) are omitted due to missing data. The final dataframes have data from 105-108 subjects, including 5 with MELAS condition.
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r load_packages}
+library(tidyverse)
+```
+
+```{r set_path}
+
+# set data paths
+
+data_path <- "/Users/christinekuryla/Documents/A_Columbia_Research/MiSBIE/misbie/data/raw_data_110_202404"
+
+# do not put a trailing /
+
+# the files are named miXXXPeriod_typeofdata.csv where
+# miXXX is the id number
+# Period = Base, CP, DBT, Instruct, Post5/10/20/30/60/90/120, Pre, PrepTask, SST, ST, Task
+# typeofdata.csv = _bptimes.csv, _rsp.csv, _rttimes.csv
+# Sometimes there is a file miXXXY.bi but I'm not sure what that is
+
+```
+
+```{r hard_code_periods_and_ftypes}
+# These are the periods in the order of the protocol
+
+# string vector
+periods_str <- c("Base",
+                 "Pre",
+                 "Instruct",
+                 "PrepTask",
+                 "Task",
+                 "Post5",
+                 "Post10",
+                 "Post20",
+                 "Post30",
+                 "Post60",
+                 "Post90",
+                 "Post120",
+                 "DBT",
+                 "ST",
+                 "SST",
+                 "CP")
+
+# factor vector
+# create a vector with the periods as factors in the correct order (not alphabetical)
+# this is for ease of plotting later
+periods_factor <- factor(periods_str, levels = periods_str)
+
+# create a vector with the ids. We have 110.
+ids <- str_c("mi", sprintf("%03d", 1:110))
+
+ftypes <- c("_rttimes.csv", "_bptimes.csv", "_rsp.csv")
+
+```
+
+# Check data for completeness
+
+```{r data_checking}
+# Inevitably, some files will not be formatted correctly. Here we check for that.
+# Make a function because this will need to be checked many times as we manually clean the data. 
+
+check_data <- function(input_id){
+
+# Initialize a flag variable to track missing files
+missing_files <- FALSE
+
+subjects_without_rsp <- c("mi003", "mi004", "mi047")
+subjects_without_bptimes <- c("mi047")
+subjects_without_rttimes <- c()
+
+#subjects_without_bptimes <- 
+
+# Loop through each subject ID
+#for (id in ids) {
+for (id in input_id) {
+  # Loop through each period
+  for (period in periods_str) {
+    for(ftype in ftypes) {
+      
+      # skip known missing sets of data
+      if(ftype == "_rsp.csv" && id %in% subjects_without_rsp)
+        next  # Skip the current iteration and move to the next period
+      if(ftype == "_bptimes.csv" && id %in% subjects_without_bptimes)
+        next
+      if(ftype == "_rttimes.csv" && id %in% subjects_without_rttimes)
+        next
+      
+      # skip known issing periods
+      if(id %in% c("mi094", "mi104") && period %in% c("DBT", "ST", "SST", "CP"))
+        next
+      
+      # skip known missing files
+      if(paste0(id, period, ftype) == "mi109CP_rsp.csv")
+        next
+      if(paste0(id, period, ftype) == "mi070CP_rttimes.csv")
+        next
+      if(paste0(id, period, ftype) == "mi026CP_bptimes.csv")
+        next
+      if(paste0(id, period, ftype) %in% c("mi106Task_rttimes.csv", "mi106DBT_bptimes.csv", "mi106CP_rttimes.csv", "mi106CP_bptimes.csv", "mi106CP_rsp.csv"))
+        next
+
+      
+      # skip known missing subjects
+      if(id %in% c("mi014", "mi075"))
+        next
+       
+      # Construct the file path for the current subject, period, and file type
+      file_name <- paste0(id, period, ftype)
+      file_path <- file.path(data_path, file_name, fsep = .Platform$file.sep)
+      
+      # Check if the file exists
+      if (!file.exists(file_path)) {
+        cat("Missing file:", file_path, "\n")
+        missing_files <- TRUE
+    }
+    }
+  }
+}
+
+# Print overall status
+if (!missing_files) {
+  cat("All files exist in the desired format.\n")
+} else {
+  cat("Some files are missing or not in the desired format.\n")
+}
+
+}
+
+#check_data(ids)
+
+# Problems with CP
+# rsp: 3, 4, 14, 47, 75, 94, 104, 106, 109
+# rttimes: 14, 70, 75, 94, 104, 106
+# bptimes: 14, 26, 47, 75, 94, 104, 106
+
+# Problems with other
+
+# Time to clean
+# This was just manually checked and the missing data was accounted for
+
+check_data("mi003")
+check_data("mi004")
+check_data("mi047")
+check_data("mi109")
+check_data("mi070")
+check_data("mi026")
+
+check_data("mi014") 
+check_data("mi075") 
+check_data("mi094") 
+check_data("mi104") 
+check_data("mi106") 
+
+
+check_data(ids)
+
+check_data("mi002") # rsp for PrepTask and Task missing
+check_data("mi009") # rttimes for Base missing
+check_data("mi012") # bptimes for Base, Instruct, Post5, Post120, DBT, ST missing
+check_data("mi016") # rttimes for Instruct missing
+check_data("mi024") # bptimes for Post120 missing
+check_data("mi028") # rttimes for SST missing
+check_data("mi032") # rsp for Post10 missing
+check_data("mi041") # mi041Post120_bptimes.csv 
+check_data("mi046") # mi046Post5_rttimes.csv 
+check_data("mi050") # mi050ST_bptimes.csv 
+check_data("mi053") # mi053Post60_rsp.csv 
+check_data("mi083") # mi083SST_rttimes.csv , mi083SST_rsp.csv 
+check_data("mi087") # mi087DBT_bptimes.csv 
+check_data("mi088") # mi088ST_bptimes.csv 
+check_data("mi098") # mi098Post30_bptimes.csv 
+check_data("mi105") # mi105Task_rsp.csv 
+check_data("mi108") # mi108PrepTask_rsp.csv 
+check_data("mi110") # mi110Post5_rsp.csv , mi110Post10_rsp.csv , mi110Post120_bptimes.csv 
+
+
+# Summary
+
+# mi003 is missing rsp
+# mi004 is missing rsp
+# mi047 is missing rsp and bptimes
+# mi109 is missing rsp for CP only
+# mi070 is missing rttimes for CP only
+# mi014 does not have correct files (it just says acquisition?) --> omitted
+# mi026 is missing bptimes for CP only but there is another file mi026CP.2.bi --> check what this means
+# mi075 is missing completely
+# mi094 is missing the last 4 tasks (CP, SST, ST, DBT)
+# mi104 is missing the last 4 tasks (CP, SST, ST, DBT)
+# mi106 is missing all CP, rttimes in Task, and bptimes in DBT
+# see above for more one-off missingness
+
+
+```
+
+
+```{r gathering_conditions}
+
+cond_ecg <- read_csv(file.path(data_path, "ecgtimes_and_conditions.csv")) %>% 
+  select(id, condition) %>% 
+  unique()
+cond_rsp <- read_csv(file.path(data_path, "rsptimes_and_conditions.csv")) %>% 
+  select(id, condition) %>% 
+  unique()
+
+condition_id <- full_join(cond_ecg, cond_rsp)
+
+table(condition_id$condition)
+
+condition_id <- condition_id %>%
+#  filter(condition != "MELAS") %>%
+  mutate(condition = case_when(
+    grepl("3243 A>G", condition) ~ "Mutation",
+    condition == "Single Deletion" ~ "Deletion",
+    TRUE ~ as.character(condition)
+  ))
+  
+table(condition_id$condition)
+
+#write_csv(condition_id, file = file.path(data_path, "condition_id.csv"))
+
+```
+
+# Lists
+
+```{r hard_code_lists}
+
+# Skip above if wanted
+
+condition_id <- read_csv(file.path(data_path, "condition_id.csv"))
+ids <- condition_id$id
+
+ftypes <- c("_rttimes.csv", "_bptimes.csv", "_rsp.csv")
+
+# These are the periods in the order of the protocol
+
+# string vector
+periods_str <- c("Base",
+                 "Pre",
+                 "Instruct",
+                 "PrepTask",
+                 "Task",
+                 "Post5",
+                 "Post10",
+                 "Post20",
+                 "Post30",
+                 "Post60",
+                 "Post90",
+                 "Post120",
+                 "DBT",
+                 "ST",
+                 "SST",
+                 "CP")
+
+# factor vector
+# create a vector with the periods as factors in the correct order (not alphabetical)
+# this is for ease of plotting later
+# 
+periods_factor <- factor(periods_str, levels = periods_str)
+
+# as.character(periods_factor)
+
+```
+
+# Respiration rate and df
+## Includes a list of the missing data
+
+Ok great, now we know what's missing. Let's move forward and make dfs for each bptimes, rsp, rttimes. Then we will calculate the rates.
+
+```{r make_resp_rate_df}
+
+# Respiration Rate
+
+rr_raw <- data_frame()
+ftype = "_rsp.csv"
+for(id_str in ids) {
+  for(period in periods_factor){
+# for(id_str in c("mi002", "mi048")) {
+#   for(period in c("Task", "CP")){
+    
+  condition_str <- condition_id %>% filter(id == id_str) %>% pull(condition)
+  file_name <- paste0(id_str, period, ftype)
+  file_path <- file.path(data_path, file_name, fsep = .Platform$file.sep)
+  
+   if (!file.exists(file_path)) {
+     print(file_name)
+     next
+     }
+  
+  data <- read_csv(file_path, show_col_types = FALSE) %>% 
+    mutate(diff = pSec - lag(pSec)) %>%
+    mutate(sum_t2 = pSec + lag(pSec)) %>% 
+    mutate(rate = 60/diff) %>%
+    mutate(time = sum_t2/2) %>%
+    rename_with(~ paste0(substr(ftype, 2, nchar(ftype) - 3),.), everything()) %>%
+    mutate(id = id_str) %>% 
+    mutate(period = period) %>% 
+    mutate(condition = condition_str) %>% 
+    select(id, period, condition, everything())
+  
+  rr_raw <- rbind(rr_raw, data)
+
+  }
+}
+
+table(rr_raw$condition) # includes MELAS
+length(unique(rr_raw$id)) # 105 have at least 1 rsp data, # 5 of those are MELAS
+
+rr_raw %>% 
+  group_by(condition, period) %>% 
+  summarize(n = n_distinct(id))
+
+rr_raw %>% 
+  group_by(condition) %>% 
+  filter(period == "Post30") %>% 
+  summarize(n = n_distinct(id))
+
+# Some periods are missing, but in general, we have:
+#   condition     n
+#   <chr>     <int>
+# 1 Control      68
+# 2 Deletion     14
+# 3 MELAS         5
+# 4 Mutation     18
+
+#write_csv(rr_raw, file = file.path(data_path, "rr_raw_105.csv"))
+
+# These did not exist:
+# [1] "mi002PrepTask_rsp.csv"                                                               # [1] "mi002Task_rsp.csv"
+
+# [1] "mi003Base_rsp.csv"                                                                   # [1] "mi003Pre_rsp.csv"
+# [1] "mi003Instruct_rsp.csv"
+# [1] "mi003PrepTask_rsp.csv"
+# [1] "mi003Task_rsp.csv"
+# [1] "mi003Post5_rsp.csv"
+# [1] "mi003Post10_rsp.csv"
+# [1] "mi003Post20_rsp.csv"
+# [1] "mi003Post30_rsp.csv"
+# [1] "mi003Post60_rsp.csv"
+# [1] "mi003Post90_rsp.csv"
+# [1] "mi003Post120_rsp.csv"
+# [1] "mi003DBT_rsp.csv"
+# [1] "mi003ST_rsp.csv"
+# [1] "mi003SST_rsp.csv"
+# [1] "mi003CP_rsp.csv"
+
+# [1] "mi004Base_rsp.csv"
+# [1] "mi004Pre_rsp.csv"
+# [1] "mi004Instruct_rsp.csv"
+# [1] "mi004PrepTask_rsp.csv"
+# [1] "mi004Task_rsp.csv"
+# [1] "mi004Post5_rsp.csv"
+# [1] "mi004Post10_rsp.csv"
+# [1] "mi004Post20_rsp.csv"
+# [1] "mi004Post30_rsp.csv"
+# [1] "mi004Post60_rsp.csv"
+# [1] "mi004Post90_rsp.csv"
+# [1] "mi004Post120_rsp.csv"
+# [1] "mi004DBT_rsp.csv"
+# [1] "mi004ST_rsp.csv"
+# [1] "mi004SST_rsp.csv"
+# [1] "mi004CP_rsp.csv"
+
+# [1] "mi032Base_rsp.csv"                                                                   # [1] "mi032Pre_rsp.csv"
+# [1] "mi032Instruct_rsp.csv"
+# [1] "mi032PrepTask_rsp.csv"
+# [1] "mi032Task_rsp.csv"
+# [1] "mi032Post5_rsp.csv"
+# [1] "mi032Post10_rsp.csv"
+
+# [1] "mi047Base_rsp.csv"                                                                   # [1] "mi047Pre_rsp.csv"
+# [1] "mi047Instruct_rsp.csv"
+# [1] "mi047PrepTask_rsp.csv"
+# [1] "mi047Task_rsp.csv"
+# [1] "mi047Post5_rsp.csv"
+# [1] "mi047Post10_rsp.csv"
+# [1] "mi047Post20_rsp.csv"
+# [1] "mi047Post30_rsp.csv"
+# [1] "mi047Post60_rsp.csv"
+# [1] "mi047Post90_rsp.csv"
+# [1] "mi047Post120_rsp.csv"
+# [1] "mi047DBT_rsp.csv"
+# [1] "mi047ST_rsp.csv"
+# [1] "mi047SST_rsp.csv"
+# [1] "mi047CP_rsp.csv"
+
+# [1] "mi053Post60_rsp.csv"                                                                                                        
+# [1] "mi083SST_rsp.csv"                                                                                                           
+# [1] "mi094DBT_rsp.csv"                                                                    # [1] "mi094ST_rsp.csv"
+# [1] "mi094SST_rsp.csv"
+# [1] "mi094CP_rsp.csv"
+
+# [1] "mi104DBT_rsp.csv"                                                                    # [1] "mi104ST_rsp.csv"
+# [1] "mi104SST_rsp.csv"
+# [1] "mi104CP_rsp.csv"
+
+# [1] "mi105Task_rsp.csv"                                                                                                          
+# [1] "mi106CP_rsp.csv"                                                                                                            
+# [1] "mi108PrepTask_rsp.csv"                                                                                                      
+# [1] "mi109CP_rsp.csv"                                                                                                            
+# [1] "mi110Post5_rsp.csv"                                                                  # [1] "mi110Post10_rsp.csv"
+
+
+
+```
+
+# Heart rate and df
+## Includes a list of the missing data
+
+```{r make_heart_rate_df}
+
+# Heart Rate
+
+hr_raw <- data_frame()
+ftype = "_rttimes.csv"
+for(id_str in ids) {
+  for(period in periods_factor){
+ # for(id_str in c("mi002", "mi048")) {
+ #   for(period in c("Task", "ST")){
+    
+  condition_str <- condition_id %>% filter(id == id_str) %>% pull(condition)
+  file_name <- paste0(id_str, period, ftype)
+  file_path <- file.path(data_path, file_name, fsep = .Platform$file.sep)
+  
+   if (!file.exists(file_path)) {
+     print(file_name)
+     next
+     }
+  
+  data <- read_csv(file_path, show_col_types = FALSE) %>% 
+    mutate(diff = pSec - lag(pSec)) %>%
+    mutate(sum_t2 = pSec + lag(pSec)) %>% 
+    mutate(rate = 60/diff) %>%
+    mutate(time = sum_t2/2) %>%
+    rename_with(~ paste0(substr(ftype, 2, nchar(ftype) - 3),.), everything()) %>%
+    mutate(id = id_str) %>% 
+    mutate(period = period) %>% 
+    mutate(condition = condition_str) %>% 
+    select(id, period, condition, everything())
+  
+  hr_raw <- rbind(hr_raw, data)
+
+  }
+ }
+
+hr_raw <- hr_raw %>% 
+  mutate(heart.rate = rttimes.rate) %>% 
+  mutate(heart.time = rttimes.time)
+
+table(hr_raw$condition) # includes MELAS
+length(unique(hr_raw$id)) # 108 have at least 1 rttimes data, # 5 of those are MELAS
+
+hr_raw %>% 
+  group_by(condition, period) %>% 
+  summarize(n = n_distinct(id))
+
+hr_raw %>% 
+  group_by(condition) %>% 
+  filter(period == "ST") %>% 
+  summarize(n = n_distinct(id))
+
+# Some periods are missing, but in general, we have:
+#  condition     n
+#   <chr>     <int>
+# 1 Control      69
+# 2 Deletion     15
+# 3 MELAS         4
+# 4 Mutation     18
+
+#write_csv(hr_raw, file = file.path(data_path, "hr_raw_108.csv"))
+
+# These did not exist: 
+
+# [1] "mi009Base_rttimes.csv"                                                                                                      
+# [1] "mi016Instruct_rttimes.csv"                                                                                                  
+# [1] "mi028SST_rttimes.csv"                                                                                                       
+# [1] "mi046Post5_rttimes.csv"                                                                                                     
+# [1] "mi070CP_rttimes.csv"                                                                                                        
+# [1] "mi083SST_rttimes.csv"                                                                                                       
+# [1] "mi094DBT_rttimes.csv"                                                                
+# [1] "mi094ST_rttimes.csv"
+# [1] "mi094SST_rttimes.csv"
+# [1] "mi094CP_rttimes.csv"
+
+# [1] "mi104DBT_rttimes.csv"                                                                
+# [1] "mi104ST_rttimes.csv"
+# [1] "mi104SST_rttimes.csv"
+# [1] "mi104CP_rttimes.csv"
+
+# [1] "mi106Task_rttimes.csv"                                                               
+# [1] "mi106CP_rttimes.csv"
+
+```
+
+# Blood pressure df
+## Includes a list of the missing data
+
+```{r make_bp_df}
+
+# Blood Pressure
+
+bp_raw <- data_frame()
+ftype = "_bptimes.csv"
+for(id_str in ids) {
+  for(period in periods_factor){
+#  for(id_str in c("mi002", "mi048")) {
+#    for(period in c("Task", "ST")){
+    
+  condition_str <- condition_id %>% filter(id == id_str) %>% pull(condition)
+  file_name <- paste0(id_str, period, ftype)
+  file_path <- file.path(data_path, file_name, fsep = .Platform$file.sep)
+  
+   if (!file.exists(file_path)) {
+     print(file_name)
+     next
+     }
+  
+  data <- read_csv(file_path, show_col_types = FALSE) %>% 
+   # mutate(diff = pSec - lag(pSec)) %>%
+  #  mutate(sum_t2 = pSec + lag(pSec)) %>% 
+  #  mutate(rate = 60/diff) %>%
+   # mutate(time = sum_t2/2) %>%
+    rename_with(~ paste0(substr(ftype, 2, nchar(ftype) - 3),.), everything()) %>%
+    mutate(id = id_str) %>% 
+    mutate(period = period) %>% 
+    mutate(condition = condition_str) %>% 
+    select(id, period, condition, everything())
+  
+  bp_raw <- rbind(bp_raw, data)
+
+  }
+ }
+
+bp_raw <- bp_raw %>% 
+  mutate(bp.pVal = bptimes.pVal) %>% 
+  mutate(bp.time = bptimes.pSec)
+
+table(bp_raw$condition) # includes MELAS
+length(unique(bp_raw$id)) # 107 have at least 1 bp data, # 5 of those are MELAS
+
+bp_raw %>% 
+  group_by(condition, period) %>% 
+  summarize(n = n_distinct(id))
+
+bp_raw %>% 
+  group_by(condition) %>% 
+  filter(period == "Base") %>% 
+  summarize(n = n_distinct(id))
+
+# Some periods are missing but in general:
+
+# # A tibble: 4 × 2
+#   condition     n
+#   <chr>     <int>
+# 1 Control      68
+# 2 Deletion     15
+# 3 MELAS         5
+# 4 Mutation     18
+
+# write_csv(bp_raw, file = file.path(data_path, "bp_raw_107.csv"))
+
+# These did not exist:
+
+# [1] "mi012Base_bptimes.csv"                                                                  # [1] "mi012Instruct_bptimes.csv"                                                              # [1] "mi012Post5_bptimes.csv"                                                                 # [1] "mi012Post120_bptimes.csv"                                                               # [1] "mi012DBT_bptimes.csv"
+# [1] "mi012ST_bptimes.csv"
+
+# [1] "mi024Post120_bptimes.csv"                                                                                                      
+# [1] "mi026CP_bptimes.csv"                                                                                                           
+# [1] "mi041Post120_bptimes.csv"                                                                                                      
+# [1] "mi047Base_bptimes.csv"                                                                  # [1] "mi047Pre_bptimes.csv"
+# [1] "mi047Instruct_bptimes.csv"
+# [1] "mi047PrepTask_bptimes.csv"
+# [1] "mi047Task_bptimes.csv"
+# [1] "mi047Post5_bptimes.csv"
+# [1] "mi047Post10_bptimes.csv"
+# [1] "mi047Post20_bptimes.csv"
+# [1] "mi047Post30_bptimes.csv"
+# [1] "mi047Post60_bptimes.csv"
+# [1] "mi047Post90_bptimes.csv"
+# [1] "mi047Post120_bptimes.csv"
+# [1] "mi047DBT_bptimes.csv"
+# [1] "mi047ST_bptimes.csv"
+# [1] "mi047SST_bptimes.csv"
+# [1] "mi047CP_bptimes.csv"
+
+# [1] "mi050ST_bptimes.csv"                                                                                                           
+# [1] "mi087DBT_bptimes.csv"                                                                                                          
+# [1] "mi088ST_bptimes.csv"                                                                                                           
+# [1] "mi094DBT_bptimes.csv"                                                                   # [1] "mi094ST_bptimes.csv"
+# [1] "mi094SST_bptimes.csv"
+# [1] "mi094CP_bptimes.csv"
+
+# [1] "mi098Post30_bptimes.csv"                                                                                                       
+# [1] "mi104DBT_bptimes.csv"                                                                   # [1] "mi104ST_bptimes.csv"
+# [1] "mi104SST_bptimes.csv"
+# [1] "mi104CP_bptimes.csv"
+
+# [1] "mi106DBT_bptimes.csv"                                                                   # [1] "mi106CP_bptimes.csv"                                                                                                           
+# [1] "mi110Post120_bptimes.csv"
+
+```
+
+# Explanation of rate calculation 
+
+### This is for RR, but the logic and steps are the same for HR.
+
+(generated using Claude from Anthropic)
+
+data <- read_csv(file_path, show_col_types = FALSE):
+
+This line reads a CSV file from the specified file_path using the read_csv() function from the readr package.
+The show_col_types = FALSE argument suppresses the printing of column types after reading the file.
+The CSV file is assumed to have a column named "pSec" which contains the time of each inspiration in seconds.
+
+
+mutate(diff = pSec - lag(pSec)):
+
+The mutate() function is used to create a new column named "diff" in the data dataframe.
+The lag() function is applied to the "pSec" column, which shifts the values down by one row. This allows us to calculate the time difference between consecutive inspirations.
+By subtracting the lagged "pSec" values from the original "pSec" values, we obtain the time differences between consecutive inspirations, stored in the "diff" column.
+
+
+mutate(sum_t2 = pSec + lag(pSec)):
+
+Another new column named "sum_t2" is created using mutate().
+The lag() function is again applied to the "pSec" column to get the previous inspiration time.
+By adding the current "pSec" value and the lagged "pSec" value, we calculate the sum of two consecutive inspiration times, stored in the "sum_t2" column.
+
+
+mutate(rate = 60/diff):
+
+A new column named "rate" is created using mutate().
+The respiration rate is calculated by dividing 60 (seconds per minute) by the time difference between consecutive inspirations ("diff").
+This gives us the respiration rate in breaths per minute, assuming that each inspiration represents one breath.
+
+
+mutate(time = sum_t2/2):
+
+Finally, a new column named "time" is created using mutate().
+The "time" column represents the average time between two consecutive inspirations.
+It is calculated by dividing the sum of two consecutive inspiration times ("sum_t2") by 2.
+
+
+
+The purpose of these calculations is to determine the respiration rate and the average time between inspirations from the raw data:
+
+The time difference between consecutive inspirations is used to calculate the respiration rate in breaths per minute.
+The average time between two consecutive inspirations provides a measure of the respiratory cycle duration.
+
+By using the lag() function, we can perform calculations based on the previous row's values, allowing us to compute differences and averages between consecutive inspirations.
+The mutate() function is used to create new columns in the dataframe, keeping the original data intact while adding the calculated values.
+Overall, this code reads in the raw inspiration time data, calculates the respiration rate and average time between inspirations, and stores the results in new columns within the dataframe for further analysis.
