@@ -1,0 +1,200 @@
+---
+title: "Combine Metrics"
+author: "Christine Lucille Kuryla"
+date: "2024-05-22"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+```
+
+Load data
+
+```{r load_data}
+
+hr_raw <- read_csv("/Users/christinekuryla/Documents/A_Columbia_Research/MiSBIE/misbie/data/raw_data_110_202404/hr_raw_108.csv")
+rr_raw <- read_csv("/Users/christinekuryla/Documents/A_Columbia_Research/MiSBIE/misbie/data/raw_data_110_202404/rr_raw_105.csv")
+bp_raw <- read_csv("/Users/christinekuryla/Documents/A_Columbia_Research/MiSBIE/misbie/data/raw_data_110_202404/bp_raw_107.csv")
+
+```
+
+Hard code missing data
+
+```{r missing_data}
+
+# See import RMD for details
+# For now, if there exists at least one missing modality, we will remove that id/period combo.
+
+missing_data <- (rbind(
+  c("mi002", "PrepTask"), #rsp 
+  c("mi002", "Task"), #rsp
+c("mi009", "Base"), #rttimes
+c("mi012", "Instruct"), #bptimes
+c("mi012", "Post5"), #bptimes
+c("mi012", "Post120"), #bptimes
+c("mi012", "DBT"), #bptimes
+c("mi012", "ST"), #bptimes
+c("mi016", "Instruct"), # rttimes for Instruct missing
+c("mi024", "Post120"), # bptimes for Post120 missing
+c("mi028", "SST"), # rttimes for SST missing
+c("mi032", "Post10"), # rsp for Post10 missing
+c("mi041", "Post120"), # mi041Post120_bptimes.csv 
+c("mi046", "Post5"), # mi046Post5_rttimes.csv 
+c("mi050", "ST"), # mi050ST_bptimes.csv 
+c("mi053", "Post60"), # mi053Post60_rsp.csv 
+c("mi083", "SST"), # mi083SST_rttimes.csv , mi083SST_rsp.csv 
+c("mi087", "DBT"), # mi087DBT_bptimes.csv 
+c("mi088", "ST"), # mi088ST_bptimes.csv 
+c("mi098", "Post30"), # mi098Post30_bptimes.csv 
+c("mi105", "Task"), # mi105Task_rsp.csv 
+c("mi108", "PrepTask"), # mi108PrepTask_rsp.csv 
+c("mi110", "Post5"), # mi110Post5_rsp.csv , mi110Post10_rsp.csv , mi110Post120_bptimes.csv 
+c("mi110", "Post10"),
+c("mi110", "Post120"),
+c("mi109", "CP"), # mi109 is missing rsp for CP only
+c("mi070", "CP"), # mi070 is missing rttimes for CP only
+c("mi026", "CP"), # mi026 is missing bptimes for CP only but there is another file mi026CP.2.bi --> check what this means
+c("mi094", "CP"), # mi094 is missing the last 4 tasks (CP, SST, ST, DBT)
+c("mi094", "SST"),
+c("mi094", "ST"),
+c("mi094", "DBT"),
+c("mi104", "CP"), # mi104 is missing the last 4 tasks (CP, SST, ST, DBT)
+c("mi104", "SST"),
+c("mi104", "ST"),
+c("mi104", "DBT"),
+c("mi106", "CP"), # mi106 is missing all CP, rttimes in Task, and bptimes in DBT
+c("mi106", "Task"),
+c("mi106", "DBT")
+))
+
+colnames(missing_data) <- c("id", "period")
+
+# also just take out mi003, mi004, mi047
+
+# Summary
+
+# mi003 is missing rsp
+# mi004 is missing rsp
+# mi047 is missing rsp and bptimes
+
+# mi014 does not have correct files (it just says acquisition?) --> omitted
+# mi075 is missing completely
+
+
+```
+
+Map data to matching intervals
+
+```{r}
+
+# Assuming you have the following data frames:
+# - hr_df: heart rate data with columns 'id', 'period', 'time', 'rate'
+# - rsp_df: respiration data with columns 'id', 'period', 'pSec', 'pVal', 'rate'
+# - bp_df: blood pressure data with columns 'id', 'period', 'pSec', 'pVal'
+
+# hr_df <- hr_raw %>%
+#   mutate(time = heart.time) %>%
+#   mutate(rate = heart.rate) %>%
+#   select(id, period, condition, time, rate)
+# 
+# rsp_df <- rr_raw %>% 
+#   mutate(pSec = rsp.pSec) %>% 
+#   mutate(pVal = rsp.pVal) %>% 
+#   mutate(rate = rsp.rate) %>% 
+#   select(id, period, condition, pSec, pVal, rate)
+# 
+# bp_df <- bp_raw %>% 
+#   mutate(pSec = bptimes.pSec) %>% 
+#   mutate(pVal = bp.pVal) %>% 
+#   select(id, period, condition, pSec, pVal)
+  
+
+# Desired time interval (in seconds)
+interval <- 4
+
+# Get unique subject IDs and periods
+subject_ids <- unique(c(hr_df$id, rsp_df$id, bp_df$id))
+periods <- unique(c(hr_df$period, rsp_df$period, bp_df$period))
+
+# Initialize an empty list to store the aligned data frames
+aligned_data <- list()
+
+# Iterate over each subject and period
+for (subject in subject_ids) {
+  for (period in periods) {
+    # Subset data for the current subject and period
+    hr_sub <- hr_df %>% filter(id == subject, period == period)
+    rsp_sub <- rsp_df %>% filter(id == subject, period == period)
+    bp_sub <- bp_df %>% filter(id == subject, period == period)
+    
+    # Find the common time range
+    min_start_time <- min(hr_sub$heart.time, rsp_sub$rsp.pSec, bp_sub$bptimes.pSec, na.rm = TRUE)
+    max_end_time <- max(hr_sub$heart.time, rsp_sub$rsp.pSec, bp_sub$bptimes.pSec, na.rm = TRUE)
+    
+    # Create common time breaks
+    time_breaks <- seq(min_start_time, max_end_time, interval)
+    
+    # Align heart rate data
+    hr_aligned <- hr_sub %>%
+      mutate(interval = cut(heart.time, breaks = time_breaks)) %>%
+      group_by(id, period, condition, interval) %>%
+      summarise(rate_mean = mean(rate, na.rm = TRUE))
+    
+    # Align respiration data
+    rsp_aligned <- rsp_sub %>%
+      mutate(interval = cut(rsp.pSec, breaks = time_breaks)) %>%
+      group_by(id, period, condition, interval) %>%
+      summarise(pVal_mean = mean(pVal, na.rm = TRUE), rate_mean = mean(rate, na.rm = TRUE))
+    
+    # Align blood pressure data
+    bp_aligned <- bp_sub %>%
+      mutate(interval = cut(bptimes.pSec, breaks = time_breaks)) %>%
+      group_by(id, period, condition, interval) %>%
+      summarise(pVal_mean = mean(pVal, na.rm = TRUE))
+    
+    # Combine aligned data frames
+    aligned_sub <- full_join(hr_aligned, rsp_aligned, by = c("id", "period", "condition", "interval")) %>%
+      full_join(bp_aligned, by = c("id", "period", "condition", "interval"))
+    
+    # Append the aligned data frame to the list
+    aligned_data[[paste(subject, period, sep = "_")]] <- aligned_sub
+  }
+}
+
+# Combine all aligned data frames into a single data frame
+aligned_df <- bind_rows(aligned_data)
+
+# Filter out the periods/ids with missing data
+
+comb_df_filtered <- aligned_df 
+
+missing_data <- as.data.frame(missing_data)
+for (i in 1:dim(missing_data)[1]) {
+  # print(missing_data$id[i])
+  # print(missing_data$period[i])
+  comb_df_filtered <- comb_df_filtered %>% 
+    filter(!(id == missing_data$id[i] & period == missing_data$period[i]))
+}
+comb_df_filtered <- comb_df_filtered %>% 
+  filter(!(id %in% c("mi003", "mi004", "mi047")))
+
+#comb_df_filtered <- comb_df_filtered %>% 
+#  filter(condition != "MELAS")
+
+comb_df <- comb_df_filtered
+
+```
+
+Now we have a df with all three values matched to the same intervals. However, there are some NAs because (particularly for the respiration data) sometimes the space between the data points is longer than the mapped interval. 
+
+Here, we will interpolate the NAs.
+
+```{r interpolate_nas}
+
+
+
+```
+
