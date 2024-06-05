@@ -5,6 +5,9 @@ date: "2024-05-22"
 output: html_document
 ---
 
+
+For sensitivity analyses, try to vary the length of the mapping time interval (currently 4 seconds), the interpolation method (currently spline, natural), the limits of the outlier removal, and setting the removed outliers to be the boundary values instead of interpolated.
+
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 
@@ -18,6 +21,30 @@ Load data
 hr_raw <- read_csv("/Users/christinekuryla/Documents/A_Columbia_Research/MiSBIE/misbie/data/raw_data_110_202404/hr_raw_108.csv")
 rr_raw <- read_csv("/Users/christinekuryla/Documents/A_Columbia_Research/MiSBIE/misbie/data/raw_data_110_202404/rr_raw_105.csv")
 bp_raw <- read_csv("/Users/christinekuryla/Documents/A_Columbia_Research/MiSBIE/misbie/data/raw_data_110_202404/bp_raw_107.csv")
+
+# for graphing
+# string vector
+periods_str <- c("Base",
+                 "Pre",
+                 "Instruct",
+                 "PrepTask",
+                 "Task",
+                 "Post5",
+                 "Post10",
+                 "Post20",
+                 "Post30",
+                 "Post60",
+                 "Post90",
+                 "Post120",
+                 "DBT",
+                 "ST",
+                 "SST",
+                 "CP")
+
+# factor vector
+# create a vector with the periods as factors in the correct order (not alphabetical)
+# this is for ease of plotting later
+periods_factor <- factor(periods_str, levels = periods_str)
 
 ```
 
@@ -67,7 +94,8 @@ c("mi104", "ST"),
 c("mi104", "DBT"),
 c("mi106", "CP"), # mi106 is missing all CP, rttimes in Task, and bptimes in DBT
 c("mi106", "Task"),
-c("mi106", "DBT")
+c("mi106", "DBT"),
+c("mi069", "Pre") # missing BP
 ))
 
 colnames(missing_data) <- c("id", "period")
@@ -86,13 +114,83 @@ colnames(missing_data) <- c("id", "period")
 
 ```
 
+Initial EDA 
+
+```{r initial_eda}
+# Visualize the raw data
+
+ggplot(hr_raw, aes(x = heart.time, y = heart.rate, group = id, color = condition)) + 
+ # geom_smooth(se = FALSE, size = 0.2) +
+  geom_line() +
+  facet_wrap(~ period) + ggtitle("Heart Rate")
+
+ggplot(rr_raw, aes(x = rsp.time, y = rsp.rate, group = id, color = condition)) + 
+ # geom_smooth(se = FALSE, size = 0.2) +
+  geom_line() +
+  facet_wrap(~ period) + ggtitle("Respiration Rate")
+
+ggplot(bp_raw, aes(x = bp.time, y = bp.pVal, group = id, color = condition)) +
+ # geom_smooth(se = FALSE, size = 0.2) +
+  geom_line() +
+  facet_wrap(~ period) + ggtitle("Blood Pressure")
+```
+
+Initial outlier value removal
+
+```{r initial_cleaning}
+# Clearly there are some unreasonable values where the sensors or calculations were off. Let's replace them with NAs
+
+## remove outliers observation for individuals
+
+hr_df <- hr_raw
+rr_df <- rr_raw
+bp_df <- bp_raw
+
+# Reasonable ranges for heart rate
+for (i in 1:nrow(hr_df)){
+  if (hr_df$heart.rate[i] < 10| hr_df$heart.rate[i] > 300| is.na(hr_df$heart.rate[i]))
+    {hr_df$heart.rate[i] = NA}
+}
+
+# Reasonable ranges for respiration rate
+for (i in 1:nrow(rr_df)){
+  if (rr_df$rsp.rate[i] < 1| rr_df$rsp.rate[i] > 150| is.na(rr_df$rsp.rate[i]))
+    {rr_df$rsp.rate[i] = NA}
+}
+
+# Reasonable ranges for blood pressure
+for (i in 1:nrow(bp_df)){
+  if (bp_df$bp.pVal[i] < 30| bp_df$bp.pVal[i] > 350| is.na(bp_df$bp.pVal[i]))
+    {bp_df$bp.pVal[i] = NA}
+}
+```
+
+
+```{r initial_cleaning_visualization}
+ggplot(hr_df, aes(x = heart.time, y = heart.rate, group = id, color = condition)) + 
+ # geom_smooth(se = FALSE, size = 0.2) +
+  geom_line() +
+  facet_wrap(~ period) + ggtitle("Heart Rate")
+
+ggplot(rr_df, aes(x = rsp.time, y = rsp.rate, group = id, color = condition)) + 
+ # geom_smooth(se = FALSE, size = 0.2) +
+  geom_line() +
+  facet_wrap(~ period) + ggtitle("Respiration Rate")
+
+ggplot(bp_df, aes(x = bp.time, y = bp.pVal, group = id, color = condition)) + 
+ # geom_smooth(se = FALSE, size = 0.2) +
+  geom_line() +
+  facet_wrap(~ period) + ggtitle("Blood Pressure")
+
+```
+
+
 Map data to matching intervals
 
-```{r}
-
+```{r map_to_matching_intervals}
 # Assuming you have the following data frames:
 # - hr_df: heart rate data with columns 'id', 'period', 'time', 'rate'
-# - rsp_df: respiration data with columns 'id', 'period', 'pSec', 'pVal', 'rate'
+# - rr_df: respiration data with columns 'id', 'period', 'pSec', 'pVal', 'rate'
 # - bp_df: blood pressure data with columns 'id', 'period', 'pSec', 'pVal'
 
 # hr_df <- hr_raw %>%
@@ -100,7 +198,7 @@ Map data to matching intervals
 #   mutate(rate = heart.rate) %>%
 #   select(id, period, condition, time, rate)
 # 
-# rsp_df <- rr_raw %>% 
+# rr_df <- rr_raw %>% 
 #   mutate(pSec = rsp.pSec) %>% 
 #   mutate(pVal = rsp.pVal) %>% 
 #   mutate(rate = rsp.rate) %>% 
@@ -110,14 +208,18 @@ Map data to matching intervals
 #   mutate(pSec = bptimes.pSec) %>% 
 #   mutate(pVal = bp.pVal) %>% 
 #   select(id, period, condition, pSec, pVal)
+
+# hr_df <- hr_raw
+# rr_df <- rr_raw
+# bp_df <- bp_raw
   
 
 # Desired time interval (in seconds)
-interval <- 4
+interval <- 3
 
 # Get unique subject IDs and periods
-subject_ids <- unique(c(hr_df$id, rsp_df$id, bp_df$id))
-periods <- unique(c(hr_df$period, rsp_df$period, bp_df$period))
+subject_ids <- unique(c(hr_df$id, rr_df$id, bp_df$id))
+periods <- unique(c(hr_df$period, rr_df$period, bp_df$period))
 
 # Initialize an empty list to store the aligned data frames
 aligned_data <- list()
@@ -127,7 +229,7 @@ for (subject in subject_ids) {
   for (period in periods) {
     # Subset data for the current subject and period
     hr_sub <- hr_df %>% filter(id == subject, period == period)
-    rsp_sub <- rsp_df %>% filter(id == subject, period == period)
+    rsp_sub <- rr_df %>% filter(id == subject, period == period)
     bp_sub <- bp_df %>% filter(id == subject, period == period)
     
     # Find the common time range
@@ -141,19 +243,19 @@ for (subject in subject_ids) {
     hr_aligned <- hr_sub %>%
       mutate(interval = cut(heart.time, breaks = time_breaks)) %>%
       group_by(id, period, condition, interval) %>%
-      summarise(rate_mean = mean(rate, na.rm = TRUE))
+      summarise(HR = mean(heart.rate, na.rm = TRUE))
     
     # Align respiration data
     rsp_aligned <- rsp_sub %>%
       mutate(interval = cut(rsp.pSec, breaks = time_breaks)) %>%
       group_by(id, period, condition, interval) %>%
-      summarise(pVal_mean = mean(pVal, na.rm = TRUE), rate_mean = mean(rate, na.rm = TRUE))
+      summarise(RR = mean(rsp.rate, na.rm = TRUE), rsp_pVal = mean(rsp.pVal, na.rm = TRUE))
     
     # Align blood pressure data
     bp_aligned <- bp_sub %>%
       mutate(interval = cut(bptimes.pSec, breaks = time_breaks)) %>%
       group_by(id, period, condition, interval) %>%
-      summarise(pVal_mean = mean(pVal, na.rm = TRUE))
+      summarise(BP = mean(bp.pVal, na.rm = TRUE))
     
     # Combine aligned data frames
     aligned_sub <- full_join(hr_aligned, rsp_aligned, by = c("id", "period", "condition", "interval")) %>%
@@ -172,19 +274,45 @@ aligned_df <- bind_rows(aligned_data)
 comb_df_filtered <- aligned_df 
 
 missing_data <- as.data.frame(missing_data)
+
 for (i in 1:dim(missing_data)[1]) {
-  # print(missing_data$id[i])
-  # print(missing_data$period[i])
   comb_df_filtered <- comb_df_filtered %>% 
     filter(!(id == missing_data$id[i] & period == missing_data$period[i]))
 }
+
 comb_df_filtered <- comb_df_filtered %>% 
   filter(!(id %in% c("mi003", "mi004", "mi047")))
 
 #comb_df_filtered <- comb_df_filtered %>% 
 #  filter(condition != "MELAS")
 
-comb_df <- comb_df_filtered
+comb_df <- comb_df_filtered %>% 
+  mutate(period = factor(period, levels = periods_str)) %>% 
+  unique()
+
+
+```
+
+
+```{r viz_so_far_2}
+
+# p_hr = ggplot(comb_df, aes(x = interval, y = HR, group = id, color = condition)) + 
+#  # geom_smooth(se = FALSE, size = 0.2) +
+#   geom_line() +
+#   facet_wrap(~ period) + ggtitle("Heart Rate")
+# ggplotly(p_hr, mode = "markers", color = ~condition, colors = "Set1")
+
+ggplot(comb_df, aes(x = interval, y = HR, group = id, color = condition)) +
+  geom_line() +
+  facet_wrap(~ period) + ggtitle("Heart Rate")
+
+ggplot(comb_df, aes(x = interval, y = RR, group = id, color = condition)) +
+  geom_line() +
+  facet_wrap(~ period) + ggtitle("Respiration Rate")
+
+ggplot(comb_df, aes(x = interval, y = BP, group = id, color = condition)) +
+  geom_line() +
+  facet_wrap(~ period) + ggtitle("Blood Pressure")
 
 ```
 
@@ -194,7 +322,62 @@ Here, we will interpolate the NAs.
 
 ```{r interpolate_nas}
 
+library(imputeTS)
 
+# using old code might make it prettier later
+
+comb_df_orig <- comb_df
+
+h = 1
+
+period_vector = unique(comb_df$period)
+library(imputeTS)
+
+for (i in 1:length(unique(comb_df$id))) {
+  
+  cur_id = as.character(unique(comb_df$id)[i])
+  cur = comb_df %>% filter(id == cur_id)
+  
+  #for (j in c("CP", "DBT", "SST", "ST")) {
+  for (j in period_vector) {
+    
+    n = nrow(cur %>% filter(period == j))
+
+    # just for fixing the form, some missing value are not shown as NA, we need them to been shown as NA
+    if (nrow(cur %>% filter(period == j)) == 0) {} else if
+    (sum(is.na((cur %>% filter(period == j))$HR)) == n |
+     sum(is.na((cur %>% filter(period == j))$RR)) == n |
+     sum(is.na((cur %>% filter(period == j))$rsp_pVal)) == n |
+     sum(is.na((cur %>% filter(period == j))$BP)) == n) {
+
+      comb_df$HR[h:(n+h-1)] = rep(NA, n)
+      comb_df$RR[h:(n+h-1)] = rep(NA, n)
+      comb_df$rsp_pVal[h:(n+h-1)] = rep(NA, n)
+      comb_df$BP[h:(n+h-1)] = rep(NA, n)
+      h = h + n
+
+    } else {
+      
+      cur_HR = na_interpolation((cur %>% filter(period == j))$HR, option = "spline", maxgap = 3)
+      cur_RR = na_interpolation((cur %>% filter(period == j))$RR, option = "spline", maxgap = 3)
+      cur_rsp_pVal = na_interpolation((cur %>% filter(period == j))$rsp_pVal, option = "spline", maxgap = 3)
+      cur_BP = na_interpolation((cur %>% filter(period == j))$BP, option = "spline", maxgap = 3)
+      
+      comb_df$HR[h:(n+h-1)] = cur_HR
+      comb_df$RR[h:(n+h-1)] = cur_RR
+      comb_df$rsp_pVal[h:(n+h-1)] = cur_rsp_pVal
+      comb_df$BP[h:(n+h-1)] = cur_BP
+    
+      h = h + n
+    }
+  }
+}
+
+#write_csv(comb_df, file = file.path("./data_processed", "comb_df_20240524.csv"))
+
+
+# remove the missingness?
+#comb_df <- comb_df %>% drop_na()
 
 ```
 
