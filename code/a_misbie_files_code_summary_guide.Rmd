@@ -1,0 +1,44 @@
+---
+title: "MiSBIE Analysis Summary"
+author: "Christine Lucille Kuryla"
+date: "2024-05-23"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Background
+
+MiSBIE
+
+# Data
+
+* Load raw data and format it appropriately: 
+  * data_import_and_format_raw.Rmd
+    * Save hr_raw, rr_raw, bp_raw
+
+* Combine all three datasets and align them (for example, for TE calculations)
+  * map_intervals_and_combine.Rmd
+  
+# Analysis
+
+* Measures from single variable (only hr, rr, or bp)
+  * single_variable_measures.Rmd
+    * ApEn, SampEn, HRV/rsp, etc
+
+* Transfer entropy
+  * transfer_entropy.Rmd
+  
+* Comparing the measures from the previous Rmds to each other
+  * comparing_measures.Rmd
+
+
+# More  
+
+* Simulations, tests, and sanity checks along the way
+  * simulations_and_sanity_checks.Rmd
+  
+* Vignettes
+  * vignette_rhrv.Rmd
