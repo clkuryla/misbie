@@ -38,7 +38,7 @@ theme_set(theme_minimal() + theme(legend.position = "bottom"))
 
 See "misbie_explore.Rmd" for more details about the variables and some EDA. 
 
-*tl;dr:* There are three groups: healthy, mutation, and deletion. The mutation and deletion groups are subjects with genetic mitochondrial abnormalities. Continuous heart rate, respiration rate, and blood pressure measures were recorded for 71 subjects over several tasks and recovery periods.
+*tl;dr:* There are three groups: healthy, mutation, and deletion. The mutation and deletion groups are subjects with genetic mitochondrial abnormalities. Heart rate, respiration rate, and blood pressure measures were recorded for 71 subjects over several tasks and recovery periods.
 
 ## Data Forms
 
@@ -49,6 +49,7 @@ At least two types of forms of the data will be used:
 1. Non-constant delta-t --> raw data for heart rate and respiration rate
 2. Constant delta-t --> interpolated, methods from transfer entropy
   a. This may be split into periods that align as well as more appropriate time periods
+  b. Must be calculated and subsequently interpolated
 
 ## Objective
 
@@ -102,9 +103,9 @@ library(tidyverse)
 # For now, we will focus on heart rate.
 
 hr_raw <- read_csv("./data/data_from_email/hr_cleaned.csv")
-#bp_raw <- read_csv("./data/data_from_email/bp_cleaned.csv")
+bp_raw <- read_csv("./data/data_from_email/bp_cleaned.csv")
 rsp_raw <- read_csv("./data/data_from_email/rsp_cleaned.csv")
-#pt_cond_raw <- read_csv("./data/data_from_email/patient condition.csv")
+pt_cond_raw <- read_csv("./data/data_from_email/patient condition.csv")
 
 # Sample size
 length(unique(hr_raw))
@@ -121,7 +122,9 @@ hr_raw_final <- hr_raw %>%
   mutate(rate = ifelse(rate > 150 | rate < 25, NA, rate)) %>% #Replace with NA if HR is > 150 or < 25 
   mutate(delta_t  = pSec - lag(pSec)) %>% 
   mutate(delta_t = ifelse(delta_t > 5 | delta_t < -5, NA, delta_t)) # get rid of the first data point (lag) and the unreasonable data points
-  
+
+
+
 
 hr_df <- hr_raw_final
 
@@ -172,6 +175,8 @@ comb_df_8 <- comb_df %>% filter(period == 8)
 table(comb_df$condition)
 
 ```
+
+
 
 ## Optional to save computational time
 
@@ -248,6 +253,15 @@ ggplot(comb_df %>% filter(id != "mi027"), aes(x = interval, y = pval_bp, color =
   facet_wrap(~period)
 
 
+
+
+############
+
+ggplotly(ggplot(hr_df, aes(x = pSec, y = rate, color = id)) +
+  geom_line() +
+  theme(legend.position = "none") +
+  labs(title = "Heart Rate") +
+  facet_wrap(~period))
 
 ```
 
@@ -381,8 +395,15 @@ https://search.r-project.org/CRAN/refmans/pracma/html/entropy.html
 ```{r approx_and_sample_entropy_pracma}
 library(pracma)
 
-test <- comb_df %>% filter(period == 1) %>% filter(id == "mi001")
+test <- comb_df %>% filter(period == "Post5") %>% filter(id == "mi005")
 data <- pull(test, rate_hr)
+
+comb_df <- comb_df %>% 
+  mutate(rate_hr = HR) %>% 
+  mutate(pval_bp = BP) %>% 
+  mutate(rate_rsp = RR)
+
+id_cond_df <- comb_df %>% ungroup() %>% select(id, condition) %>% unique()
 
 approx_entropy(pull(test, rate_hr), edim = 2, r = 0.2*sd(pull(test, rate_hr)), elag = 1)
 
@@ -398,16 +419,16 @@ multiscale_entropy(data, scales = scales, method = "SampEn")
 
 test_te_fctn <- metric_te(comb_df_6_12 %>% filter(period == 8) %>% filter(id =="mi024"), rate_hr, pval_bp)
 
-entropy_summary_6_12 <- comb_df_6_12 %>% 
+entropy_summary_6_12 <- comb_df %>% 
   group_by(id, period) %>% 
   na.omit() %>% 
-  summarize(hr_approx_entropy = metric_approx_entropy(rate_hr),
+  summarize(hr_approx_entropy = metric_approx_entropy(rate_hr)#,
            # bp_approx_entropy = metric_approx_entropy(pval_bp),
           #  rsp_approx_entropy = metric_approx_entropy(rate_rsp),
           #  hr_sample_entropy = metric_sample_entropy(rate_hr),
           #  bp_sample_entropy = metric_sample_entropy(pval_bp),
           #  rsp_sample_entropy = metric_sample_entropy(rate_rsp),
-            hr_corr_dim = metric_corr_dim(rate_hr)
+          #  hr_corr_dim = metric_corr_dim(rate_hr)
             ) %>% 
   ungroup() %>% 
   left_join(id_cond_df, by = "id") %>% 
@@ -458,6 +479,9 @@ metric_summary <- entropy_summary %>%
   select(-condition, -period) %>% 
   left_join(hr_rhrv_summary, by = "id") %>% 
   select(id, period, condition, everything())
+
+entropy_summary <- entropy_summary_6_12 %>% 
+  filter(condition %in% c("Mutation", "Deletion", "Control"))
 
 t.test(data = entropy_summary %>% filter(condition != "Deletion"),
        hr_approx_entropy ~ condition)

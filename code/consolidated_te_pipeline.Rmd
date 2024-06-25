@@ -1,0 +1,1099 @@
+---
+title: "Reproduce TE"
+author: "Christine Lucille Kuryla"
+date: "2024-06-07"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+
+library(tidyverse)
+
+# import data
+
+te_df_original <- read_rds("./TE_df_original.RDS")
+
+# for 49 sample size
+hr_raw <- read_csv("./data/data_from_email/hr_cleaned.csv")
+bp_raw <- read_csv("./data/data_from_email/bp_cleaned.csv")
+rr_raw <- read_csv("./data/data_from_email/rsp_cleaned.csv")
+pt_cond_raw <- read_csv("./data/data_from_email/patient condition.csv")
+
+# For 108 sample size
+# hr_raw <- read_csv("/Users/christinekuryla/Documents/A_Columbia_Research/MiSBIE/misbie/data/raw_data_110_202404/hr_raw_108.csv")
+# rr_raw <- read_csv("/Users/christinekuryla/Documents/A_Columbia_Research/MiSBIE/misbie/data/raw_data_110_202404/rr_raw_105.csv")
+# bp_raw <- read_csv("/Users/christinekuryla/Documents/A_Columbia_Research/MiSBIE/misbie/data/raw_data_110_202404/bp_raw_107.csv")
+
+# for graphing
+# string vector
+periods_str <- c("Base",
+                 "Pre",
+                 "Instruct",
+                 "PrepTask",
+                 "Task",
+                 "Post5",
+                 "Post10",
+                 "Post20",
+                 "Post30",
+                 "Post60",
+                 "Post90",
+                 "Post120",
+                 "DBT",
+                 "ST",
+                 "SST",
+                 "CP")
+
+# factor vector
+# create a vector with the periods as factors in the correct order (not alphabetical)
+# this is for ease of plotting later
+periods_factor <- factor(periods_str, levels = periods_str)
+
+```
+
+Hard code missing data
+
+```{r missing_data}
+
+# See import RMD for details
+# For now, if there exists at least one missing modality, we will remove that id/period combo.
+
+missing_data <- (rbind(
+  c("mi002", "PrepTask"), #rsp 
+  c("mi002", "Task"), #rsp
+c("mi009", "Base"), #rttimes
+c("mi012", "Instruct"), #bptimes
+c("mi012", "Post5"), #bptimes
+c("mi012", "Post120"), #bptimes
+c("mi012", "DBT"), #bptimes
+c("mi012", "ST"), #bptimes
+c("mi016", "Instruct"), # rttimes for Instruct missing
+c("mi024", "Post120"), # bptimes for Post120 missing
+c("mi028", "SST"), # rttimes for SST missing
+c("mi032", "Post10"), # rsp for Post10 missing
+c("mi041", "Post120"), # mi041Post120_bptimes.csv 
+c("mi046", "Post5"), # mi046Post5_rttimes.csv 
+c("mi050", "ST"), # mi050ST_bptimes.csv 
+c("mi053", "Post60"), # mi053Post60_rsp.csv 
+c("mi083", "SST"), # mi083SST_rttimes.csv , mi083SST_rsp.csv 
+c("mi087", "DBT"), # mi087DBT_bptimes.csv 
+c("mi088", "ST"), # mi088ST_bptimes.csv 
+c("mi098", "Post30"), # mi098Post30_bptimes.csv 
+c("mi105", "Task"), # mi105Task_rsp.csv 
+c("mi108", "PrepTask"), # mi108PrepTask_rsp.csv 
+c("mi110", "Post5"), # mi110Post5_rsp.csv , mi110Post10_rsp.csv , mi110Post120_bptimes.csv 
+c("mi110", "Post10"),
+c("mi110", "Post120"),
+c("mi109", "CP"), # mi109 is missing rsp for CP only
+c("mi070", "CP"), # mi070 is missing rttimes for CP only
+c("mi026", "CP"), # mi026 is missing bptimes for CP only but there is another file mi026CP.2.bi --> check what this means
+c("mi094", "CP"), # mi094 is missing the last 4 tasks (CP, SST, ST, DBT)
+c("mi094", "SST"),
+c("mi094", "ST"),
+c("mi094", "DBT"),
+c("mi104", "CP"), # mi104 is missing the last 4 tasks (CP, SST, ST, DBT)
+c("mi104", "SST"),
+c("mi104", "ST"),
+c("mi104", "DBT"),
+c("mi106", "CP"), # mi106 is missing all CP, rttimes in Task, and bptimes in DBT
+c("mi106", "Task"),
+c("mi106", "DBT"),
+c("mi069", "Pre") # missing BP
+))
+
+colnames(missing_data) <- c("id", "period")
+
+# also just take out mi003, mi004, mi047
+
+# Summary
+
+# mi003 is missing rsp
+# mi004 is missing rsp
+# mi047 is missing rsp and bptimes
+
+# mi014 does not have correct files (it just says acquisition?) --> omitted
+# mi075 is missing completely
+
+
+```
+
+Initial EDA 
+
+```{r initial_eda}
+
+# converting names from the subsample 
+hr_raw <- hr_raw %>% 
+  mutate(heart.rate = rate, heart.time = time) %>% 
+  filter(!(period %in% c("C3", "Acquisition", "NA")))
+rr_raw <- rr_raw %>% 
+  mutate(rsp.rate = rate, rsp.time = time) %>% 
+  filter(!(period %in% c("C3", "Acquisition", "NA")))
+bp_raw <- bp_raw %>% 
+  mutate(bp.pVal = pVal, bp.time = pSec) %>% 
+  filter(!(period %in% c("C3", "Acquisition", "NA")))
+
+# Visualize the raw data
+
+ggplot(hr_raw, aes(x = heart.time, y = heart.rate, group = id, color = condition)) + 
+ # geom_smooth(se = FALSE, size = 0.2) +
+  geom_line() +
+  facet_wrap(~ period) + ggtitle("Heart Rate")
+
+ggplot(rr_raw, aes(x = rsp.time, y = rsp.rate, group = id, color = condition)) + 
+ # geom_smooth(se = FALSE, size = 0.2) +
+  geom_line() +
+  facet_wrap(~ period) + ggtitle("Respiration Rate")
+
+ggplot(bp_raw, aes(x = bp.time, y = bp.pVal, group = id, color = condition)) +
+ # geom_smooth(se = FALSE, size = 0.2) +
+  geom_line() +
+  facet_wrap(~ period) + 
+  ggtitle("Blood Pressure")
+```
+
+
+# Map data to matching intervals and combine
+
+```{r map_to_matching_intervals}
+# Assuming you have the following data frames:
+# - hr_df: heart rate data with columns 'id', 'period', 'time', 'rate'
+# - rr_df: respiration data with columns 'id', 'period', 'pSec', 'pVal', 'rate'
+# - bp_df: blood pressure data with columns 'id', 'period', 'pSec', 'pVal'
+
+# hr_df <- hr_raw %>%
+#   mutate(time = heart.time) %>%
+#   mutate(rate = heart.rate) %>%
+#   select(id, period, condition, time, rate)
+# 
+# rr_df <- rr_raw %>% 
+#   mutate(pSec = rsp.pSec) %>% 
+#   mutate(pVal = rsp.pVal) %>% 
+#   mutate(rate = rsp.rate) %>% 
+#   select(id, period, condition, pSec, pVal, rate)
+# 
+# bp_df <- bp_raw %>% 
+#   mutate(pSec = bptimes.pSec) %>% 
+#   mutate(pVal = bp.pVal) %>% 
+#   select(id, period, condition, pSec, pVal)
+
+# hr_df <- hr_raw
+# rr_df <- rsp_raw #rr_raw
+# bp_df <- bp_raw
+
+hr_df <- hr_raw 
+rr_df <- rr_raw %>% 
+  mutate(rsp.pSec = rsp.time,
+         rsp.pVal = pVal) 
+bp_df <- bp_raw %>% 
+  mutate(bptimes.pSec = bp.time) 
+  
+
+# Desired time interval (in seconds)
+interval <- 1
+
+# # Get unique subject IDs and periods
+# 
+# subject_ids <- unique(c(hr_df$id, rr_df$id, bp_df$id))
+# periods <- unique(c(hr_df$period, rr_df$period, bp_df$period))
+
+
+subject_ids <- intersect(hr_df$id, rr_df$id)
+subject_ids<- intersect(subject_ids, bp_df$id)
+periods <- intersect(hr_df$period, rr_df$period)
+periods <- intersect(periods, bp_df$period)
+
+# This is for reproducibility test, don't actually do this
+subject_ids <- unique(te_df_original %>% pull(id))
+
+library(future)
+future::plan(multisession)
+
+# Initialize an empty list to store the aligned data frames
+#aligned_data <- list()
+aligned_data <- data.frame()
+
+# Iterate over each subject and period
+for (subject in subject_ids) {
+  for (period in periods) {
+    # Subset data for the current subject and period
+    hr_sub <- hr_df %>% filter(id == subject, period == period) 
+    rsp_sub <- rr_df %>% filter(id == subject, period == period) 
+    bp_sub <- bp_df %>% filter(id == subject, period == period)
+    
+    # Find the common time range
+    min_start_time <- min(hr_sub$heart.time, rsp_sub$rsp.pSec, bp_sub$bptimes.pSec, na.rm = TRUE)
+   #max_end_time <- max(hr_sub$heart.time, rsp_sub$rsp.pSec, bp_sub$bptimes.pSec, na.rm = TRUE)
+    min_end_time <- min(max(hr_sub$heart.time, na.rm = TRUE), 
+                        max(rsp_sub$rsp.pSec, na.rm = TRUE), 
+                        max(bp_sub$bptimes.pSec, na.rm = TRUE)) #, na.rm = TRUE)
+    
+    # Create common time breaks
+    time_breaks <- seq(min_start_time, min_end_time, interval)
+  #  time_breaks <- seq(1, floor(min_end_time))
+    
+   # time_breaks <- seq(0, 300, interval)
+    
+    # Align heart rate data
+    hr_aligned <- hr_sub %>%
+      ungroup() %>% 
+      mutate(interval = cut(heart.time, breaks = time_breaks)) %>%
+      group_by(id, period, condition, interval) %>%
+      summarise(HR = mean(heart.rate, na.rm = TRUE))
+    
+    # Align respiration data
+    rsp_aligned <- rsp_sub %>%
+      ungroup() %>% 
+      mutate(interval = cut(rsp.pSec, breaks = time_breaks)) %>%
+      group_by(id, period, condition, interval) %>%
+      summarise(RR = mean(rsp.rate, na.rm = TRUE), rsp_pVal = mean(rsp.pVal, na.rm = TRUE))
+    
+    # Align blood pressure data
+    bp_aligned <- bp_sub %>%
+      ungroup() %>% 
+      mutate(interval = cut(bptimes.pSec, breaks = time_breaks)) %>%
+      group_by(id, period, condition, interval) %>%
+      summarise(BP = mean(bp.pVal, na.rm = TRUE))
+    
+    # Combine aligned data frames
+    aligned_sub <- full_join(hr_aligned, rsp_aligned, by = c("id", "period", "condition", "interval")) %>%
+      full_join(bp_aligned, by = c("id", "period", "condition", "interval"))
+    
+    # Append the aligned data frame to the list
+    #aligned_data[[paste(subject, period, sep = "_")]] <- aligned_sub
+    aligned_data <- rbind(aligned_data, aligned_sub)
+  }
+}
+
+# Combine all aligned data frames into a single data frame
+#aligned_df <- bind_rows(aligned_data)
+#aligned_df <- aligned_data
+
+
+
+comb_df <- aligned_data 
+
+#write_csv(aligned_data, "/Users/christinekuryla/Documents/A_Columbia_Research/MiSBIE/misbie/data_processed/aligned_comb_20240610.csv")
+
+# Filter out the periods/ids with missing data
+# missing_data <- as.data.frame(missing_data)
+# 
+# for (i in 1:dim(missing_data)[1]) {
+#   comb_df_filtered <- comb_df_filtered %>% 
+#     filter(!(id == missing_data$id[i] & period == missing_data$period[i]))
+# }
+# 
+# comb_df_filtered <- comb_df_filtered %>% 
+#   filter(!(id %in% c("mi003", "mi004", "mi047")))
+# 
+# #comb_df_filtered <- comb_df_filtered %>% 
+# #  filter(condition != "MELAS")
+# 
+# comb_df <- comb_df_filtered 
+# 
+# comb_df <- comb_df_filtered %>% 
+#   mutate(period = factor(period, levels = periods_str)) #%>% 
+# #  unique()
+# 
+# comb_df_start <- comb_df
+# 
+# View(comb_df %>% filter(period == "CP", id == "mi005"))
+
+```
+
+
+#### data cleaning
+```{r}
+
+
+comb_df <- comb_df %>% 
+            mutate(condition = factor(condition, levels = c("Control", "Mutation", "Deletion"))) %>% 
+            mutate(period_name = period) %>% 
+            mutate(period = factor(period_name, levels=c('1','2','3','4','5','6','7','8','9','10','11','12','DBT','ST','SST', 'CP'))) %>%
+            mutate(period_longer = case_match(period,
+                                              "1" ~ "Base",
+                                              "2" ~ "Pre",
+                                              c("3", "4", "5") ~ "Task",
+                                              c("6", "7", "8", 
+                                                "9", "10", "11", "12") ~ "Post",
+                                              .default = as.character(period))) %>%
+            # arrange(id, period) %>% 
+            # mutate(interval = as.numeric(interval)) %>%  # Ensure interval is numeric
+            arrange(id, period) %>% 
+            #         case_when(
+            #           period %in% c("Instruct", "PrepTask", "Task") ~ as.numeric(factor(period, levels = c("Instruct", "PrepTask", "Task"))),
+            #           TRUE ~ extract_numeric(as.character(period))
+            #         ),
+            #         interval) %>%
+            # ungroup() %>% 
+            group_by(id, period_longer) %>%
+            mutate(interval_longer = row_number()) %>%
+            #mutate(interval_longer = as.integer(interval)) %>%
+            ungroup() %>% 
+            mutate(period_longer = factor(period_longer, levels = c("Base", "Pre", "Task", 
+                            "Post", "DBT", "ST", "SST", "CP")))
+
+
+
+# Plot
+ggplot(comb_df %>% 
+         filter(id == "mi010", period_longer == "Base") %>%
+         pivot_longer(cols = c("HR", "RR", "BP"), names_to = "measurement", values_to = "value"), aes(x = interval, y = value, group = measurement, color = measurement)) +
+  geom_point() +
+  facet_wrap(~ period_longer) + 
+  ggtitle("HR, BP, RR")
+
+# comb_df <- comb_df %>% 
+#   mutate(period_name = period) %>% 
+#   mutate(period_number = case_match(
+#                 period,
+#                  "Base" ~ "1",
+#                  "Pre" ~ "2",
+#                  "Instruct" ~ "3",
+#                  "PrepTask" ~ "4",
+#                  "Task" ~ "5",
+#                  "Post5" ~ "6",
+#                  "Post10" ~ "7",
+#                  "Post20" ~ "8",
+#                  "Post30" ~ "9",
+#                  "Post60" ~ "10",
+#                  "Post90" ~ "11",
+#                  "Post120" ~ "12",
+#                  # "DBT",
+#                  # "ST",
+#                  # "SST",
+#                  # "CP",
+#                  .default = as.character(period))) %>% 
+#             mutate(period = factor(period_name, levels = periods_str)) %>%
+#             arrange(id, period) %>% 
+#             mutate(period_longer = case_match(period,
+#                                               "Base" ~ "Base",
+#                                               "Pre" ~ "Pre",
+#                                               c("Instruct", "PrepTask", "Task") ~ "Task",
+#                                               c("Post5", "Post10", "Post20", 
+#                                                 "Post30", "Post60", "Post90", "Post120") ~ "Post",
+#                                               .default = as.character(period))) %>%
+#             mutate(interval = as.numeric(interval)) %>%  # Ensure interval is numeric
+#             arrange(id, period_longer,
+#                     case_when(
+#                       period %in% c("Instruct", "PrepTask", "Task") ~ as.numeric(factor(period, levels = c("Instruct", "PrepTask", "Task"))),
+#                       TRUE ~ extract_numeric(as.character(period))
+#                     ),
+#                     interval) %>%
+#             ungroup() %>% 
+#             group_by(id, period_longer) %>%
+#             mutate(interval_longer = row_number()) %>%
+#             #mutate(interval_longer = as.integer(interval)) %>%
+#             ungroup() %>% 
+#             mutate(period_longer = factor(period_longer, levels = c("Base", "Pre", "Task", 
+#                             "Post", "DBT", "ST", "SST", "CP")))
+
+comb_df$period <- factor(comb_df$period, levels=c('1','2','3','4','5','6','7','8','9','10','11','12','DBT','ST', 'SST', "CP"))
+
+# comb_df = left_join((comb_df %>% filter(id %in% id_rsp)), rsp_cleaned, by = c("id", "period", "interval", "condition"))  %>% 
+# #  mutate(period = as.factor(period)) %>%
+#   arrange(id, period, interval) %>%
+#   select(-diff) %>% 
+#   filter(period != "C3") 
+# #%>% filter(period %in% c("CP", "SST", "ST", "DBT"))
+
+unique(comb_df$period)
+
+comb_df$condition <- factor(comb_df$condition, levels=c('Control', 'Mutation', 'Deletion'))
+unique(comb_df$condition)
+```
+
+```{r}
+
+#ADDED
+
+comb_df <- comb_df %>% 
+  mutate(rate_mean = HR) %>% 
+  mutate(pval_mean = BP) %>% 
+  mutate(rate = RR)
+
+```
+
+
+```{r}
+#comb_df = comb_df %>% filter(id != "mi026" & id != "mi035"& id != "mi039" & id!= "mi029")
+
+library(plotly)
+
+p_hr = ggplot(comb_df, aes(x = interval, y = rate_mean, group = id, color = condition)) +
+ # geom_line() +
+  geom_smooth(se = FALSE, size = 0.2) +
+  facet_wrap(~ period) + ggtitle("Heart Rate")
+ggplotly(p_hr, mode = "markers", color = ~state, colors = "Set1")
+
+p_bp = ggplot(comb_df, aes(x = interval, y = pval_mean, group = id, color = condition)) + 
+ #  geom_line() +
+  geom_smooth(se = FALSE, size = 0.2) +
+  facet_wrap(~ period) + ggtitle("Blood Pressure")
+plotly::ggplotly(p_bp, mode = "markers", color = ~state, colors = "Set1")
+# 8 and 12 are bad, and 19 and 23
+
+p_rsp = ggplot(comb_df, aes(x = interval, y = rate, group = id, color = condition)) + 
+  geom_smooth(se = FALSE, size = 0.2) +
+  facet_wrap(~ period) + ggtitle("Respiration Rate")
+ggplotly(p_rsp, mode = "markers", color = ~state, colors = "Set1")
+
+p_hr; p_bp; p_rsp
+
+```
+
+
+
+```{r viz_so_far_2}
+
+# p_hr = ggplot(comb_df, aes(x = interval, y = HR, group = id, color = condition)) + 
+#  # geom_smooth(se = FALSE, size = 0.2) +
+#   geom_line() +
+#   facet_wrap(~ period) + ggtitle("Heart Rate")
+# ggplotly(p_hr, mode = "markers", color = ~condition, colors = "Set1")
+
+ggplot(comb_df, aes(x = interval, y = HR, group = id, color = condition)) +
+  geom_line() +
+  facet_wrap(~ period) + 
+  ggtitle("Heart Rate")
+
+ggplot(comb_df, aes(x = interval, y = RR, group = id, color = condition)) +
+  geom_line() +
+  facet_wrap(~ period) + ggtitle("Respiration Rate")
+
+ggplot(comb_df, aes(x = interval, y = BP, group = id, color = condition)) +
+  geom_line() +
+  facet_wrap(~ period) + ggtitle("Blood Pressure")
+
+```
+
+Now we have a df with all three values matched to the same intervals. However, there are some NAs because (particularly for the respiration data) sometimes the space between the data points is longer than the mapped interval. Additionally, there are some values that are unreasonable and not biologically plausible. We will filter and then interpolate.
+
+
+```{r}
+## remove outliers patients then filling missing values
+## remove patients with no observation of particular biomarker
+
+# rename some terms
+# comb_df <- comb_df %>% 
+#   rename(rate_mean = HR, pval_mean = BP, rate = RR)
+
+# ## remove outliers observation for individuals
+# for (i in 1:nrow(comb_df)) {
+#   if (comb_df$rate_mean[i] < 10| comb_df$rate_mean[i] > 350| is.na(comb_df$rate_mean[i]))
+#     {comb_df$rate_mean[i] = NA}
+#   if (comb_df$rate[i] < 1| comb_df$rate[i] > 100| is.na(comb_df$rate[i])) 
+#     {comb_df$rate[i] = NA}
+#   if (comb_df$pval_mean[i] < 0| comb_df$pval_mean[i] > 500| is.na(comb_df$pval_mean[i]))
+#     {comb_df$pval_mean[i] = NA}
+#   
+#   print(paste(comb_df$id[i], comb_df$period[i]))
+#   
+# }
+
+unique(comb_df$period)
+unique(comb_df$id)
+
+comb_df <- comb_df %>% 
+  mutate(rate_mean = ifelse(rate_mean > 350 | rate_mean < 10, NA, rate_mean)) %>% #Replace with NA if HR is > 150 or < 25 
+  mutate(rate = ifelse(rate > 100 | rate < 1, NA, rate)) %>% 
+  mutate(pval_mean = ifelse(pval_mean > 500 | pval_mean < 0, NA, pval_mean))
+
+
+
+
+boundary = comb_df %>% group_by(id, period) %>%
+  mutate(upper_hr = max(rate_mean, na.rm = TRUE), lower_hr = min(rate_mean, na.rm = TRUE),
+         upper_bp = max(pval_mean, na.rm = TRUE), lower_bp = min(pval_mean, na.rm = TRUE),
+         upper_rsp = max(rate, na.rm = TRUE), lower_rsp = min(rate, na.rm = TRUE)) %>%
+  select(id, period, upper_hr, lower_hr, upper_bp, lower_bp, upper_rsp, lower_rsp) %>%
+  distinct()
+
+boundary_2 = comb_df %>% group_by(id) %>%  
+  mutate(upper_hr = max(rate_mean, na.rm = TRUE), lower_hr = min(rate_mean, na.rm = TRUE),
+         upper_bp = max(pval_mean, na.rm = TRUE), lower_bp = min(pval_mean, na.rm = TRUE),
+         upper_rsp = max(rate, na.rm = TRUE), lower_rsp = min(rate, na.rm = TRUE)) %>%
+  select(id, upper_hr, lower_hr, upper_bp, lower_bp, upper_rsp, lower_rsp) %>%
+  distinct()
+
+boundary <- boundary_2
+```
+
+
+```{r}
+# h = 1
+# 
+# period_vector = unique(comb_df$period)
+# library(imputeTS)
+# 
+# for (i in 1:length(unique(comb_df$id))) {
+#   
+#   cur_id = as.character(unique(comb_df$id)[i])
+#   cur = comb_df %>% filter(id == cur_id)
+#   
+#   #for (j in c("CP", "DBT", "SST", "ST")) {
+#   for (j in period_vector) {
+#     
+#     n = nrow(cur %>% filter(period == j))
+#     
+#     ## just for fixing the form, some missing value are not shown as NA, we need them to been shown as NA
+#     if (nrow(cur %>% filter(period == j)) == 0) {} else if 
+#     (sum(is.na((cur %>% filter(period == j))$rate_mean)) == n |
+#      sum(is.na((cur %>% filter(period == j))$pval_mean)) == n |
+#      sum(is.na((cur %>% filter(period == j))$pVal)) == n |
+#      sum(is.na((cur %>% filter(period == j))$rate)) == n) {
+#       
+#       comb_df$rate_mean[h:(n+h-1)] = rep(NA, n)
+#       comb_df$pval_mean[h:(n+h-1)] = rep(NA, n)
+#       comb_df$pVal[h:(n+h-1)] = rep(NA, n)
+#       comb_df$rate[h:(n+h-1)] = rep(NA, n)
+#       h = h + n
+#       
+#     } else {
+#       
+#       cur_rate_mean = na_interpolation((cur %>% filter(period == j))$rate_mean, option = "spline")
+#       cur_pval_mean = na_interpolation((cur %>% filter(period == j))$pval_mean, option = "spline")
+#       cur_pval_rsp = na_interpolation((cur %>% filter(period == j))$pVal, option = "spline")
+#       cur_rate_rsp = na_interpolation((cur %>% filter(period == j))$rate, option = "spline")
+#       
+#       comb_df$rate_mean[h:(n+h-1)] = cur_rate_mean
+#       comb_df$pval_mean[h:(n+h-1)] = cur_pval_mean
+#       comb_df$pVal[h:(n+h-1)] = cur_pval_rsp
+#       comb_df$rate[h:(n+h-1)] = cur_rate_rsp
+#     
+#       h = h + n
+#     }
+#   }
+# }
+# 
+# #comb_df_pre_iterpolation_2 <- comb_df
+# comb_df <- comb_df_pre_iterpolation_2 
+
+
+comb_df <- comb_df %>% 
+  group_by(id, period) %>% 
+  mutate(rate_mean = ifelse(sum(!is.na(rate_mean)) >= 2, imputeTS::na_interpolation(rate_mean, option = "spline"), rate_mean)) %>% 
+  mutate(pval_mean = ifelse(sum(!is.na(pval_mean)) >= 2, imputeTS::na_interpolation(pval_mean, option = "spline"), pval_mean)) %>% 
+  mutate(rate = ifelse(sum(!is.na(rate)) >= 2, imputeTS::na_interpolation(rate, option = "spline"), rate)) %>% 
+  ungroup()
+
+# 
+# comb_df = comb_df %>% drop_na() %>%
+#   filter(id != "mi030" & id != "mi048" & id != "mi050" & id != "mi054" & id != "mi058"& id != "mi059")
+```
+
+
+```{r}
+
+
+
+```
+
+
+
+```{r}
+# h = 1
+# for (i in 1:length(unique(comb_df$id))) {
+#   
+#   cur_id = as.character(unique(comb_df$id)[i])
+#   
+#   #for (j in c("CP", "DBT", "SST", "ST")) {
+#   for (j in period_vector) {
+#     cur = comb_df %>% filter(id == cur_id, period == j)
+#     n = nrow(cur)
+#     
+#     if (n > 0) {  # Check if cur is not empty
+#     
+#     hr_upper = (boundary %>% filter(id == cur_id, period == j))$upper_hr
+#     hr_lower = (boundary %>% filter(id == cur_id, period == j))$lower_hr
+#     hr = ifelse(cur$rate_mean < hr_upper, cur$rate_mean, hr_upper)
+#     hr = ifelse(hr > hr_lower, hr, hr_lower)
+#     
+#     bp_upper = (boundary %>% filter(id == cur_id, period == j))$upper_bp
+#     bp_lower = (boundary %>% filter(id == cur_id, period == j))$lower_bp
+#     bp = ifelse(cur$pval_mean < bp_upper, cur$pval_mean, bp_upper)
+#     bp = ifelse(bp > bp_lower, bp, bp_lower)
+#     
+#     rsp_upper = (boundary %>% filter(id == cur_id, period == j))$upper_rsp
+#     rsp_lower = (boundary %>% filter(id == cur_id, period == j))$lower_rsp
+#     rsp = ifelse(cur$rate < rsp_upper, cur$rate, rsp_upper)
+#     rsp = ifelse(rsp > rsp_lower, rsp, rsp_lower)
+#     
+#     comb_df$rate_mean[h:(n+h-1)] = hr
+#     comb_df$pval_mean[h:(n+h-1)] = bp
+#     comb_df$rate[h:(n+h-1)] = rsp
+#     
+#     h = h + n
+#     }
+#   }
+# }
+# 
+# comb_df_interpolated <- comb_df
+# 
+# 
+# h = 1
+# for (i in unique(comb_df$id)) {
+#   
+#   cur_id <- as.character(i)
+#   
+#   for (j in period_vector) {
+#     cur <- comb_df %>% filter(id == cur_id, period == j)
+#     n <- nrow(cur)
+#     
+#     if (n > 0) {
+#       boundary_subset <- boundary %>% filter(id == cur_id, period == j)
+#       hr_upper <- boundary_subset$upper_hr
+#       hr_lower <- boundary_subset$lower_hr
+#       hr <- ifelse(cur$rate_mean < hr_upper, cur$rate_mean, hr_upper)
+#       hr <- ifelse(hr > hr_lower, hr, hr_lower)
+#       
+#       bp_upper <- boundary_subset$upper_bp
+#       bp_lower <- boundary_subset$lower_bp
+#       bp <- ifelse(cur$pval_mean < bp_upper, cur$pval_mean, bp_upper)
+#       bp <- ifelse(bp > bp_lower, bp, bp_lower)
+#       
+#       rsp_upper <- boundary_subset$upper_rsp
+#       rsp_lower <- boundary_subset$lower_rsp
+#       rsp <- ifelse(cur$rate < rsp_upper, cur$rate, rsp_upper)
+#       rsp <- ifelse(rsp > rsp_lower, rsp, rsp_lower)
+#       
+#       index <- which(comb_df$id == cur_id & comb_df$period == j)
+#       comb_df$rate_mean[index] <- hr
+#       comb_df$pval_mean[index] <- bp
+#       comb_df$rate[index] <- rsp
+#     }
+#   }
+# }
+# 
+# comb_df_beforefilter <- comb_df_interpolated
+# 
+# comb_df_interpolated <- comb_df_beforefilter
+# comb_df_interpolated <- comb_df_interpolated %>% filter(id != "mi001") #id != "mi059" & 
+# comb_df_interpolated <- comb_df_interpolated %>% filter(id != "mi002")
+# 
+# ggplotly(ggplot(comb_df_interpolated, aes(x = interval, y = rate_mean, group = id, color = id)) + 
+# #  geom_point(size = 0.2, alpha = 0.2) +
+#   geom_line() +
+#   facet_wrap(~ period) )
+# 
+# ggplotly(ggplot(comb_df_interpolated, aes(x = interval, y = pval_mean, group = id, color = id)) + 
+# #  geom_point(size = 0.2, alpha = 0.2) +
+#   geom_line() +
+#   facet_wrap(~ period) )
+# 
+# ggplotly(ggplot(comb_df_interpolated, aes(x = interval, y = rate, group = id, color = id)) + 
+# #  geom_point(size = 0.2, alpha = 0.2) +
+#   geom_line() +
+#   facet_wrap(~ period) )
+# 
+# 
+# comb_df_poolside <- comb_df_interpolated
+# 
+# comb_df_renamed <- comb_df_poolside %>% 
+#   mutate(HR = rate_mean) %>% 
+#   mutate(BP = pVal) %>% 
+#   mutate(RR = rate) %>% 
+#   mutate(condition = case_match(condition,
+#                                 "Control" ~ "Control",
+#                                 "Mutation" ~ "Mutation",
+#                                 "Deletion" ~ "Deletion"))
+# 
+# table(comb_df_renamed$condition)
+
+# write_csv(comb_df_renamed, "/Users/christinekuryla/Documents/A_Columbia_Research/MiSBIE/misbie/comb_df_renamed_0329.csv")
+
+
+
+
+comb_df <- comb_df %>% 
+  left_join(boundary, by = c("id")) %>%
+  mutate(rate_mean = case_when(
+    rate_mean < upper_hr & rate_mean > lower_hr ~ rate_mean,
+    rate_mean >= upper_hr ~ upper_hr,
+    rate_mean <= lower_hr ~ lower_hr,
+    TRUE ~ rate_mean
+  )) %>% 
+  mutate(rate = case_when(
+    rate < upper_rsp & rate > lower_rsp ~ rate,
+    rate >= upper_rsp ~ upper_rsp,
+    rate <= lower_rsp ~ lower_rsp,
+    TRUE ~ rate
+  )) %>% mutate(pval_mean = case_when(
+    pval_mean < upper_bp & pval_mean > lower_bp ~ pval_mean,
+    pval_mean >= upper_bp ~ upper_bp,
+    pval_mean <= lower_bp ~ lower_bp,
+    TRUE ~ pval_mean
+  )) 
+# 
+# 
+# 
+# 
+# comb_df1 <- comb_df %>% 
+#   left_join(boundary, by = c("id", "period")) %>%
+#   mutate(HR = case_when(
+#     HR < upper_hr & HR > lower_hr ~ HR,
+#     HR >= upper_hr ~ upper_hr,
+#     HR <= lower_hr ~ lower_hr,
+#     TRUE ~ HR
+#   )) %>% 
+#   mutate(RR = case_when(
+#     RR < upper_rsp & RR > lower_rsp ~ RR,
+#     RR >= upper_rsp ~ upper_rsp,
+#     RR <= lower_rsp ~ lower_rsp,
+#     TRUE ~ RR
+#   )) %>% mutate(BP = case_when(
+#     BP < upper_bp & BP > lower_bp ~ HR,
+#     BP >= upper_bp ~ upper_bp,
+#     BP <= lower_bp ~ lower_bp,
+#     TRUE ~ BP
+#   ))
+
+
+
+```
+
+```{r}
+p_hr = ggplot(comb_df1 %>% filter (id == "mi010"), aes(x = interval_longer, y = rate_mean, group = id, color = condition)) + 
+  #geom_line() +
+  geom_point(size = 0.2, alpha = 0.2) +
+  facet_wrap(~ period) 
+
+p_bp = ggplot(comb_df, aes(x = interval, y = pval_mean, group = id, color = condition)) + 
+  geom_point(size = 0.2, alpha = 0.2) +
+  facet_wrap(~ period) 
+
+p_rsp = ggplot(comb_df, aes(x = interval, y = rate, group = id, color = condition)) + 
+  geom_point(size = 0.2, alpha = 0.2) +
+  facet_wrap(~ period) 
+a = 1
+p_hr; p_bp; p_rsp
+```
+
+# TE calculation
+
+```{r}
+
+comb_df_pre_te <- comb_df
+
+# add differences variables
+
+comb_df <- comb_df %>%
+  mutate(rate_diff = HR - lag(HR),
+         pval_diff = BP - lag(BP),
+         pval_rsp_diff = rsp_pVal - lag(rsp_pVal),
+         rate_rsp_diff = RR - lag(RR)) %>%
+  rename(rate_hr = HR, 
+    rate_hr_diff = rate_diff,
+         pval_bp = BP, 
+    pval_bp_diff = pval_diff,
+         pval_rsp = rsp_pVal, rate_rsp = RR) 
+
+
+
+# set comb_df, periods_str
+
+library(RTransferEntropy)
+library(future)
+
+#cur <- comb_df %>% filter(id == "mi069", period == "Post")
+
+future::plan(multisession)
+
+# Initialize data frames to store results
+te_df <- data.frame()
+skipped_te <- data.frame()
+
+
+# Loop through ids and periods (this takes a while!)
+
+#for(id_str in ids %>% pull(id)) {
+for(id_str in subject_ids) {
+# for(period_str in periods_str){
+for(period_str in unique(comb_df$period_longer)){
+
+#for(period_str in c("Post", "SST", "ST")){
+
+# 
+# for(id_str in c("mi021", "mi053", "mi069", "mi100", "mi053", "mi037")) {
+#        for(period_str in c("Post60", "PrepTask", "Post5")){
+         
+  #  cur = comb_df %>% filter(id == id_str, period == period_str)
+    cur = comb_df %>% filter(id == id_str, period_longer == period_str) %>% mutate(period = period_longer)
+    
+    print(id_str)
+    print(period_str)
+    
+    # Skip if empty
+    if (dim(cur)[1] == 0) {
+      skipped_instance <- data.frame(skipped_id = id_str,
+                                     skipped_period = period_str,
+                                     reason = "null")
+      skipped_te <- rbind(skipped_te, skipped_instance)
+      next
+    }
+    
+    # Calculate TE within tryCatch
+    tryCatch({
+      
+      # TE on differences
+      TE1hb_diff = transfer_entropy(cur$rate_hr_diff, cur$pval_bp_diff, type = 'quantiles', lx = 1, ly = 1)#, nboot = 0)#, burn = 20)
+      TE2hr_diff = transfer_entropy(cur$rate_hr_diff, cur$rate_rsp_diff, type = 'quantiles', lx = 1, ly = 1)#, nboot = 0)#, burn = 20)
+      TE3br_diff = transfer_entropy(cur$pval_bp_diff, cur$rate_rsp_diff, type = 'quantiles', lx = 1, ly = 1)#, nboot = 0)#, burn = 20)
+      
+      # TE on original time series
+      TE1hb = transfer_entropy(cur$rate_hr, cur$pval_bp, type = 'quantiles', lx = 1, ly = 1)#, burn = 20)
+      TE2hr = transfer_entropy(cur$rate_hr, cur$rate_rsp, type = 'quantiles', lx = 1, ly = 1)#, burn = 20)
+      TE3br = transfer_entropy(cur$pval_bp, cur$rate_rsp, type = 'quantiles', lx = 1, ly = 1)#, burn = 20)
+      
+      te_row <- data.frame(
+        id = id_str,
+        period = period_str,
+      # condition = condition,  
+        te_hr_bp_diff = TE1hb_diff$coef[1, 1],
+        te_bp_hr_diff = TE1hb_diff$coef[2, 1],
+        te_hr_rr_diff = TE2hr_diff$coef[1, 1],
+        te_rr_hr_diff = TE2hr_diff$coef[2, 1],
+        te_bp_rr_diff = TE3br_diff$coef[1, 1],
+        te_rr_bp_diff = TE3br_diff$coef[2, 1],
+        te_hr_bp = TE1hb$coef[1, 1],
+        te_bp_hr = TE1hb$coef[2, 1],
+        te_hr_rr = TE2hr$coef[1, 1],
+        te_rr_hr = TE2hr$coef[2, 1],
+        te_bp_rr = TE3br$coef[1, 1],
+        te_rr_bp = TE3br$coef[2, 1]#,
+        # te_hr_bp_diff_p = TE1hb_diff$coef[1, 4],
+        # te_bp_hr_diff_p = TE1hb_diff$coef[2, 4],
+        # te_hr_rr_diff_p = TE2hr_diff$coef[1, 4],
+        # te_rr_hr_diff_p = TE2hr_diff$coef[2, 4],
+        # te_bp_rr_diff_p = TE3br_diff$coef[1, 4],
+        # te_rr_bp_diff_p = TE3br_diff$coef[2, 4]#,
+        # te_hr_bp_p = TE1hb$coef[1, 4],
+        # te_bp_hr_p = TE1hb$coef[2, 4],
+        # te_hr_rr_p = TE2hr$coef[1, 4],
+        # te_rr_hr_p = TE2hr$coef[2, 4],
+        # te_bp_rr_p = TE3br$coef[1, 4],
+        # te_rr_bp_p = TE3br$coef[2, 4]
+      )
+      
+      te_df <- rbind(te_df, te_row)
+      
+    }, error = function(e) {
+      # Handle the error by storing the skipped instance
+      skipped_instance <- data.frame(skipped_id = id_str,
+                                     skipped_period = period_str,
+                                     reason = "error")
+      skipped_te <- rbind(skipped_te, skipped_instance)
+      
+      # Print error message for debugging
+      print(paste("Error for id:", id_str, "and period:", period_str))
+      print(e)
+    })
+  }
+}
+
+
+print(te_df)
+print(skipped_te)
+
+#colnames(te_df) <- names(te_row)
+
+# add condition back in 
+id_cond <- comb_df %>% 
+  ungroup() %>% 
+  select(id, condition) %>% 
+  unique()
+
+te_df <- left_join(te_df, id_cond, by = "id") %>% 
+  select(id, period, condition, everything())
+
+plan(sequential)
+# 
+# write_csv(te_df, file = file.path("./data_processed", "te_df_notdetrended_20240524.csv"))
+# write_csv(skipped_te, file = file.path("./data_processed", "skipped_te_notdetrended_20240524.csv"))
+
+te_df_8 <- te_df
+#write_csv(te_df, file = file.path("./data_processed", "te_df_8_notdetrended_20240524.csv"))
+#write_csv(skipped_te, file = file.path("./data_processed", "skipped_te_8_notdetrended_20240524.csv"))
+
+te_df_l_1 <- te_df_8
+te_df_l_3 <- te_df
+
+```
+
+Many were skipped, let's explore that. 
+
+```{r te_completeness}
+
+# Checking completeness
+te_df %>% 
+  group_by(id) %>% 
+  summarize(n_periods = n()) %>% 
+  group_by(n_periods) %>% 
+  summarize(n = n())
+
+te_df_original %>% 
+  group_by(id) %>% 
+  summarize(n_periods = n()) %>% 
+  group_by(n_periods) %>% 
+  summarize(n = n())
+
+te_df %>% 
+  group_by(period) %>% 
+  summarize(n = n())
+
+te_df_original %>% 
+  na.omit() %>% 
+  group_by(phase) %>%
+  summarize(n = n())
+
+#   n_periods     n
+#       <int> <int>
+# 1         5     1
+# 2         9     1
+# 3        10     1
+# 4        11     3
+# 5        12     4
+# 6        13     5
+# 7        14    25
+# 8        15    50
+# 9        16    15
+
+# Checking completeness
+te_df %>% 
+  group_by(id) %>% 
+  filter(period == "PrepTask") %>% 
+  summarize(n_periods = n()) %>% 
+#  filter(n_periods == 15) %>% 
+  summarize(n = n())
+
+# 34 ----> many,  many PrepTasks failed
+
+te_df %>% 
+  group_by(id, period) %>% 
+  summarize(n = n())
+  
+  
+#te_df_0 <- read_csv(file.path("./data_processed", "te_df_notdetrended_20240524.csv"))
+
+
+```
+
+# Comparing TE values (first pass)
+
+# T tests and Wilcoxon Signed Rank tests (Mann-Whitney)
+
+```{r}
+
+#head(all)
+library(tidyr)
+library(broom)
+
+# Assuming df has columns: id, condition, period, and metric
+
+combined_summary <- te_df
+
+#all_metric_names <- colnames(combined_summary %>% #select("te_hr_bp_diff":"te_rr_bp_diff"))
+all_metric_names <- colnames(combined_summary %>% select("te_hr_bp_diff":"te_rr_bp"))
+
+
+ 
+# combined_summary <- te_df_original %>% 
+#   select(id, Direction, Status, TE_value, phase) %>% 
+#   group_by(id, Status, phase) %>% 
+#   pivot_wider(names_from = Direction,
+#               values_from = TE_value) %>% 
+#   rename(condition = Status) %>% 
+#   rename(period = phase)
+# all_metric_names <- colnames(combined_summary %>% ungroup() %>% select("Hr_to_Bp":"Rsp_to_Bp"))
+
+
+
+# all_metric_names <- colnames(combined_summary %>% 
+#                                select(-"id", -"condition", -"period"))
+
+# Assuming df has columns: id, condition, period, and multiple metrics
+# all_metric_names is your vector of metric names
+library(dplyr)
+library(tidyr)
+
+results_list <- lapply(all_metric_names, function(metric) {
+  metric_data <- combined_summary %>%
+    select(id, condition, period, !!sym(metric)) %>%
+    rename(metric_value = !!sym(metric))
+  
+  pairwise_comparisons <- metric_data %>%
+    group_by(period) %>%
+    do({
+      subset_data <- .
+      comparisons <- expand.grid(unique(subset_data$condition), unique(subset_data$condition))
+      comparisons <- comparisons[comparisons$Var1 != comparisons$Var2,]
+      
+      # Initialize results dataframe
+      results <- data.frame()
+      
+      for (i in 1:nrow(comparisons)) {
+        cond1 <- comparisons$Var1[i]
+        cond2 <- comparisons$Var2[i]
+        
+        data1 <- subset(subset_data, condition == cond1)$metric_value
+        data2 <- subset(subset_data, condition == cond2)$metric_value
+        
+        if (length(data1) > 1 && length(data2) > 1) {
+          t_test_result <- t.test(data1, data2)
+          wilcoxon_test_result <- wilcox.test(data1, data2, exact = FALSE)  # allow approximate p-value
+          
+          results <- rbind(results, data.frame(
+            Var1 = cond1,
+            Var2 = cond2,
+            period = unique(subset_data$period),
+            mean_1 = t_test_result$estimate[1],
+            mean_2 = t_test_result$estimate[2],
+            n_1 = length(data1),
+            n_2 = length(data2),
+            t_test_p = t_test_result$p.value,
+            wilcoxon_test_p = wilcoxon_test_result$p.value,
+            sign_g1_v_g2 = if_else(sign(t_test_result$estimate[1] - t_test_result$estimate[2]) == 1, paste0(cond1, " higher than ", cond2), paste0(cond1, " lower than ", cond2))
+          ))
+        }
+      }
+      results
+    }) %>%
+    unnest(cols = everything())  # Specify columns to unnest
+  
+  group_means <- metric_data %>%
+    group_by(condition, period) %>%
+    summarise(mean_metric = mean(metric_value, na.rm = TRUE), .groups = 'drop')
+  
+  # Combine results
+  results <- left_join(pairwise_comparisons, group_means, by = c("Var1" = "condition", "period"))
+  results$metric <- metric  # Add the metric name to the results
+  
+  return(results)
+})
+
+results_list <- bind_rows(results_list)  # Combine all results into one data frame
+
+results_list <- results_list %>% 
+  filter(Var1 != "MELAS" & Var2 != "MELAS") %>% 
+  filter(!(Var1 == "Control" & Var2 == "Mutation")) %>% 
+  filter(!(Var1 == "Control" & Var2 == "Deletion")) %>% 
+  filter(!(Var1 == "Deletion" & Var2 == "Mutation")) %>% 
+  rename(Group1 = Var1) %>% 
+  rename(Group2 = Var2) %>% 
+  select(Group1, Group2, period, metric, sign_g1_v_g2, t_test_p, wilcoxon_test_p, everything())
+
+p_val_per_period <- results_list
+
+results_t_sig <- results_list %>% 
+  filter(t_test_p <= 0.15)
+
+results_wilcoxon_sig <- results_list %>% 
+  filter(wilcoxon_test_p <= 0.15)
+
+# write_csv(p_val_per_period, file = file.path("./data_processed", "p_val_per_period_8_notdetrended_108_20240603.csv"))
+
+```
+
+

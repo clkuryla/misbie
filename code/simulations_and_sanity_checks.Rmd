@@ -1,0 +1,192 @@
+---
+title: "Data Simulations, Tests, and Sanity Checks"
+author: "Christine Lucille Kuryla"
+date: "2024-06-05"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+This Rmd is a place for the simulations, tests, and sanity checks to live so they don't crowd the normal Rmds. 
+
+# Simulate data and test TE 
+
+1. Simulate ground truth as an equation Y which is dependent on equation X. (This has equal time intervals)
+2. Reverse engineer ground truth heart rate into RR intervals
+3. Calculate rate from these RR intervals as in our pipeline
+4. Map to equal time intervals as in our pipeline
+5. Test if TE has same result
+
+```{r}
+
+# t is the independent variable (in our case, time)
+
+
+# Create Ground Truth
+
+# Simulated heart rate data (assuming data from the previous simulation)
+set.seed(918)
+n <- 1000  # Number of time points
+phi <- 0.9  # Autoregressive parameter
+sigma <- 0.1  # Standard deviation of the noise
+
+# Simulate the first time series (X) using an AR(1) process
+X <- numeric(n)
+X[1] <- rnorm(1, mean = 0, sd = sigma)
+for (t in 2:n) {
+  X[t] <- phi * X[t - 1] + rnorm(1, mean = 0, sd = sigma)
+}
+
+# Simulate the second time series (Y) as a function of past values of X
+Y <- numeric(n)
+for (t in 2:n) {
+ # Y[t] <- 0.5 * X[t] + 0.3 * X[t - 1] + rnorm(1, mean = 0, sd = sigma)
+  Y[t] <- 0.3 * X[t - 1] + rnorm(1, mean = 0, sd = sigma)
+}
+
+# Create a data frame with uniform time intervals
+time_steps <- seq(from = 0, by = 1, length.out = n)
+heart_rate_data <- tibble(time = time_steps, heart_rate_X = X, heart_rate_Y = Y) %>% 
+  mutate(orig_x = heart_rate_X) %>% 
+  mutate(heart_rate_X = 80 + 50*orig_x) %>% 
+  mutate(orig_y = heart_rate_Y) %>% 
+  mutate(heart_rate_Y = 80 + 50*orig_y)
+
+# check TE
+transfer_entropy(heart_rate_data$heart_rate_X, heart_rate_data$heart_rate_Y, lx = 1, ly = 1)
+transfer_entropy(heart_rate_data$orig_x, heart_rate_data$orig_y, lx = 1, ly = 1)
+
+# Save ground truth for later
+ground_truth_x <- heart_rate_data %>% select(time, heart_rate_X)
+ground_truth_y <- heart_rate_data %>% select(time, heart_rate_Y)
+
+
+# Plot ground truth
+HR_long <- heart_rate_data %>%
+  pivot_longer(cols = starts_with("heart_rate_"), names_to = "series", values_to = "value")
+
+ggplot(HR_long, aes(x = time, y = value, color = series)) +
+  geom_line() +
+  labs(title = "Simulated HR Time Series", x = "Time", y = "HR") +
+  theme_minimal()
+
+
+# Now let's see if our process works
+
+# Convert heart rate to RR intervals
+heart_rate_data <- heart_rate_data %>%
+  mutate(RR_interval_X = 60 / heart_rate_X, 
+         RR_interval_Y = 60 / heart_rate_Y)
+
+# Reverse engineer the RR interval time series
+RR_intervals_X <- cumsum(heart_rate_data$RR_interval_X)
+RR_intervals_Y <- cumsum(heart_rate_data$RR_interval_Y)
+
+# Create a data frame for RR intervals
+RR_intervals_data <- tibble(time = time_steps, 
+                            pSec_x = RR_intervals_X, 
+                            pSec_y = RR_intervals_Y)
+
+# calculate rate as in our pipeline
+RR_intervals_data <- RR_intervals_data %>% 
+  mutate(diff_x = pSec_x - lag(pSec_x)) %>%
+  mutate(sum_t2_x = pSec_x + lag(pSec_x)) %>% 
+  mutate(rate_x = 60/diff_x) %>%
+  mutate(time_x = sum_t2_x/2) %>% 
+  mutate(diff_y = pSec_y - lag(pSec_y)) %>%
+  mutate(sum_t2_y = pSec_y + lag(pSec_y)) %>% 
+  mutate(rate_y = 60/diff_y) %>%
+  mutate(time_y = sum_t2_y/2)
+
+
+ggplot(RR_intervals_data, aes(x = time_x, y = rate_x)) +
+  geom_line() +
+  labs(title = "Simulated RR Intervals Time Series X", x = "Time", y = "HR") +
+  theme_minimal()
+
+ggplot(RR_intervals_data, aes(x = time_y, y = rate_y)) +
+  geom_line() +
+  labs(title = "Simulated RR Intervals Time Series Y", x = "Time", y = "HR") +
+  theme_minimal()
+
+rr_calc_rate_x <- RR_intervals_data %>% select(time_x, rate_x)
+rr_calc_rate_y <- RR_intervals_data %>% select(time_y, rate_y)
+
+
+
+##### Map to constant interval
+
+# Find the common time range
+  min_start_time <- min(rr_calc_rate_x$time_x, rr_calc_rate_y$time_y, na.rm = TRUE)
+  max_end_time <- max(rr_calc_rate_x$time_x, rr_calc_rate_y$time_y, na.rm = TRUE)
+
+# desired time interval in seconds 
+  
+  interval <- 1
+  
+# Create common time breaks
+ time_breaks <- seq(min_start_time, max_end_time, interval)
+
+hr_aligned_x <- rr_calc_rate_x %>%
+  mutate(interval = cut(time_x, breaks = time_breaks)) %>%
+  group_by(interval) %>% 
+  summarise(HR_x = mean(rate_x, na.rm = TRUE)) %>% 
+  mutate(interval_x = as.integer(interval)) %>% 
+  mutate(diff_x = HR_x - lag(HR_x)) 
+
+hr_aligned_y <- rr_calc_rate_y %>%
+  mutate(interval = cut(time_y, breaks = time_breaks)) %>%
+  group_by(interval) %>% 
+  summarise(HR_y = mean(rate_y, na.rm = TRUE)) %>% 
+  mutate(interval_y = as.integer(interval)) %>% 
+  mutate(diff_y = HR_y - lag(HR_y)) 
+
+hr_aligned <- inner_join(hr_aligned_x, hr_aligned_y, by = "interval")
+
+transfer_entropy(hr_aligned$HR_x, hr_aligned$HR_y, lx = 1, ly = 1)
+transfer_entropy(hr_aligned$diff_x, hr_aligned$diff_y, lx = 1, ly = 1)
+
+
+
+
+```
+
+This gave the expected results in the normal time series but not in the differenced time series.
+
+Let's test the NA interpolations.
+
+# Test NA interpolation methods
+
+```{r}
+
+# Randomly add in NAs
+
+hr_aligned <- hr_aligned %>% 
+  mutate(hr_na_x = HR_x) %>% 
+  mutate(hr_na_y = HR_y) %>% 
+  mutate(hr_interpolated_x = HR_x) %>% 
+  mutate(hr_interpolated_y = HR_y) 
+
+# Generate random indicies to make NA
+na_indicies_x <- sample(1:nrow(hr_aligned), size = 0.2 * nrow(hr_aligned))
+na_indicies_y <- sample(1:nrow(hr_aligned), size = 0.2 * nrow(hr_aligned))
+
+# Put NAs in heart rate data
+hr_aligned$hr_na_x[na_indicies_x] <- NA
+hr_aligned$hr_na_y[na_indicies_y] <- NA
+
+# Interpolate NAs
+hr_aligned <- hr_aligned %>% 
+  mutate(hr_interpolated_x = na_interpolation(hr_na_x, option = "spline", maxgap = 3)) %>% 
+  mutate(hr_interpolated_y = na_interpolation(hr_na_y, option = "spline", maxgap = 3))
+
+transfer_entropy(hr_aligned$hr_interpolated_x, hr_aligned$hr_interpolated_y, lx = 1, ly = 1)
+transfer_entropy(hr_aligned$diff_x, hr_aligned$diff_y, lx = 1, ly = 1)
+
+
+
+
+```
+

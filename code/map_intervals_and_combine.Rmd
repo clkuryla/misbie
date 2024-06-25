@@ -5,6 +5,11 @@ date: "2024-05-22"
 output: html_document
 ---
 
+The goal here is to map the raw data onto equally spaced intervals to enable time series analyses. 
+
+* hr_raw is the time of each heart beat
+* rr raw is the time of each inspiration and expiration
+* bp raw is the systolic blood pressure at a certain time point
 
 For sensitivity analyses, try to vary the length of the mapping time interval (currently 4 seconds), the interpolation method (currently spline, natural), the limits of the outlier removal, and setting the removed outliers to be the boundary values instead of interpolated.
 
@@ -15,6 +20,7 @@ library(tidyverse)
 ```
 
 Load data
+
 
 ```{r load_data}
 
@@ -132,7 +138,8 @@ ggplot(rr_raw, aes(x = rsp.time, y = rsp.rate, group = id, color = condition)) +
 ggplot(bp_raw, aes(x = bp.time, y = bp.pVal, group = id, color = condition)) +
  # geom_smooth(se = FALSE, size = 0.2) +
   geom_line() +
-  facet_wrap(~ period) + ggtitle("Blood Pressure")
+  facet_wrap(~ period) + 
+  ggtitle("Blood Pressure")
 ```
 
 Initial outlier value removal
@@ -148,21 +155,45 @@ bp_df <- bp_raw
 
 # Reasonable ranges for heart rate
 for (i in 1:nrow(hr_df)){
-  if (hr_df$heart.rate[i] < 10| hr_df$heart.rate[i] > 300| is.na(hr_df$heart.rate[i]))
+  if (hr_df$heart.rate[i] < 50| hr_df$heart.rate[i] > 200| is.na(hr_df$heart.rate[i]))
     {hr_df$heart.rate[i] = NA}
 }
 
 # Reasonable ranges for respiration rate
 for (i in 1:nrow(rr_df)){
-  if (rr_df$rsp.rate[i] < 1| rr_df$rsp.rate[i] > 150| is.na(rr_df$rsp.rate[i]))
+  if (rr_df$rsp.rate[i] < 5| rr_df$rsp.rate[i] > 150| is.na(rr_df$rsp.rate[i]))
     {rr_df$rsp.rate[i] = NA}
 }
 
 # Reasonable ranges for blood pressure
 for (i in 1:nrow(bp_df)){
-  if (bp_df$bp.pVal[i] < 30| bp_df$bp.pVal[i] > 350| is.na(bp_df$bp.pVal[i]))
+  if (bp_df$bp.pVal[i] < 50| bp_df$bp.pVal[i] > 250| is.na(bp_df$bp.pVal[i]))
     {bp_df$bp.pVal[i] = NA}
 }
+
+
+# Despike and interpolate
+
+library(oce) # for despike
+library(imputeTS)
+
+hr_df <- hr_df %>% 
+  mutate(heart.rate_orig = heart.rate) %>% 
+  mutate(heart.rate_despike = oce::despike(heart.rate, reference = "median", replace = "NA")) %>% 
+  mutate(heart.rate = imputeTS::na_interpolation(heart.rate_despike, option = "spline"))
+
+rr_df <- rr_df %>% 
+  mutate(rsp.rate_orig = rsp.rate) %>% 
+  mutate(rsp.rate_despike = oce::despike(rsp.rate, reference = "median", replace = "NA")) %>% 
+  mutate(rsp.rate = imputeTS::na_interpolation(rsp.rate_despike, option = "spline"))
+
+bp_df <- bp_df %>% 
+  mutate(bp.pVal_orig = bp.pVal) %>% 
+  mutate(bp.pVal_despike = oce::despike(bp.pVal, reference = "median", replace = "NA")) %>% 
+  mutate(bp.pVal = imputeTS::na_interpolation(bp.pVal_despike, option = "spline"))
+  
+  
+
 ```
 
 
@@ -175,12 +206,19 @@ ggplot(hr_df, aes(x = heart.time, y = heart.rate, group = id, color = condition)
 ggplot(rr_df, aes(x = rsp.time, y = rsp.rate, group = id, color = condition)) + 
  # geom_smooth(se = FALSE, size = 0.2) +
   geom_line() +
-  facet_wrap(~ period) + ggtitle("Respiration Rate")
+  facet_wrap(~ period) + 
+  ggtitle("Respiration Rate")
 
 ggplot(bp_df, aes(x = bp.time, y = bp.pVal, group = id, color = condition)) + 
  # geom_smooth(se = FALSE, size = 0.2) +
   geom_line() +
   facet_wrap(~ period) + ggtitle("Blood Pressure")
+
+library(plotly)
+
+ggplotly(data.frame(bp_df %>% filter(period == "Post60")) %>% 
+        ggplot(aes(x = bp.time, y = bp.pVal, group = id)) +
+          geom_line())
 
 ```
 
@@ -215,14 +253,22 @@ Map data to matching intervals
   
 
 # Desired time interval (in seconds)
-interval <- 3
+interval <- 1
 
 # Get unique subject IDs and periods
 subject_ids <- unique(c(hr_df$id, rr_df$id, bp_df$id))
 periods <- unique(c(hr_df$period, rr_df$period, bp_df$period))
 
+id_old <- c("mi001", "mi002", "mi005", "mi006", "mi007", "mi008", "mi009", "mi010", "mi011", "mi012", "mi013", "mi015" ,"mi016","mi017","mi018", "mi019" ,"mi020", "mi021", "mi022", "mi023", "mi024" ,"mi025", "mi026","mi027", "mi028", "mi029","mi030", "mi036", "mi037", "mi040" ,"mi041", "mi043" ,"mi044", "mi045", "mi046", "mi048", "mi049", "mi050", "mi051","mi052" ,"mi053", "mi054", "mi055" ,"mi056", "mi057" ,"mi059", "mi060")
+
+s_ids <- intersect(subject_ids, id_old)
+subject_ids <- s_ids
+
+
+
 # Initialize an empty list to store the aligned data frames
-aligned_data <- list()
+#aligned_data <- list()
+aligned_data <- data.frame()
 
 # Iterate over each subject and period
 for (subject in subject_ids) {
@@ -233,11 +279,14 @@ for (subject in subject_ids) {
     bp_sub <- bp_df %>% filter(id == subject, period == period)
     
     # Find the common time range
-    min_start_time <- min(hr_sub$heart.time, rsp_sub$rsp.pSec, bp_sub$bptimes.pSec, na.rm = TRUE)
-    max_end_time <- max(hr_sub$heart.time, rsp_sub$rsp.pSec, bp_sub$bptimes.pSec, na.rm = TRUE)
+   # min_start_time <- min(hr_sub$heart.time, rsp_sub$rsp.pSec, bp_sub$bptimes.pSec, na.rm = TRUE)
+   #max_end_time <- max(hr_sub$heart.time, rsp_sub$rsp.pSec, bp_sub$bptimes.pSec, na.rm = TRUE)
+    min_end_time <- min(max(hr_sub$heart.time), max(rsp_sub$rsp.pSec), max(bp_sub$bptimes.pSec), na.rm = TRUE)
     
     # Create common time breaks
-    time_breaks <- seq(min_start_time, max_end_time, interval)
+  #  time_breaks <- seq(min_start_time, max_end_time, interval)
+    
+    time_breaks <- seq(0, 300, interval)
     
     # Align heart rate data
     hr_aligned <- hr_sub %>%
@@ -262,12 +311,14 @@ for (subject in subject_ids) {
       full_join(bp_aligned, by = c("id", "period", "condition", "interval"))
     
     # Append the aligned data frame to the list
-    aligned_data[[paste(subject, period, sep = "_")]] <- aligned_sub
+    #aligned_data[[paste(subject, period, sep = "_")]] <- aligned_sub
+    aligned_data <- rbind(aligned_data, aligned_sub)
   }
 }
 
 # Combine all aligned data frames into a single data frame
-aligned_df <- bind_rows(aligned_data)
+#aligned_df <- bind_rows(aligned_data)
+aligned_df <- aligned_data
 
 # Filter out the periods/ids with missing data
 
@@ -285,6 +336,8 @@ comb_df_filtered <- comb_df_filtered %>%
 
 #comb_df_filtered <- comb_df_filtered %>% 
 #  filter(condition != "MELAS")
+
+comb_df <- comb_df_filtered 
 
 comb_df <- comb_df_filtered %>% 
   mutate(period = factor(period, levels = periods_str)) %>% 
@@ -304,7 +357,8 @@ comb_df <- comb_df_filtered %>%
 
 ggplot(comb_df, aes(x = interval, y = HR, group = id, color = condition)) +
   geom_line() +
-  facet_wrap(~ period) + ggtitle("Heart Rate")
+  facet_wrap(~ period) + 
+  ggtitle("Heart Rate")
 
 ggplot(comb_df, aes(x = interval, y = RR, group = id, color = condition)) +
   geom_line() +
@@ -319,6 +373,35 @@ ggplot(comb_df, aes(x = interval, y = BP, group = id, color = condition)) +
 Now we have a df with all three values matched to the same intervals. However, there are some NAs because (particularly for the respiration data) sometimes the space between the data points is longer than the mapped interval. 
 
 Here, we will interpolate the NAs.
+
+
+```{r}
+
+library(imputeTS)
+
+comb_df_interp <- comb_df %>%
+  group_by(id, period) %>%
+  mutate(
+    HR = tryCatch(
+      na_interpolation(HR, option = "stine")#, maxgap = 3),
+      error = function(e) HR
+    ),
+    RR = tryCatch(
+      na_interpolation(RR, option = "stine"),#, maxgap = 3),
+      error = function(e) RR
+    ),
+    rsp_pVal = tryCatch(
+      na_interpolation(rsp_pVal, option = "stine"),#, maxgap = 3),
+      error = function(e) rsp_pVal
+    ),
+    BP = tryCatch(
+      na_interpolation(BP, option = "spline"),#, maxgap = 3),
+      error = function(e) BP
+    )
+  )
+
+```
+
 
 ```{r interpolate_nas}
 

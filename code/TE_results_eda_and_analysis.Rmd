@@ -1,0 +1,1285 @@
+---
+title: "Transfer Entropy Analysis"
+author: "Christine Lucille Kuryla"
+date: "2024-03-03"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    toc_collapsed: true
+    toc_depth: 3
+    number_sections: true
+    code_folding: show 
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE) # message = FALSE
+
+library(tidyverse)
+library(broom)
+library(plotly)
+library(ICC)
+library(lme4)
+
+```
+
+Load TE df
+
+```{r load_df}
+
+# This is "df" from "result exploration 06.20.Rmd" with original data
+# How to get to this doc
+# * result exploration 06.20
+#   * all_TE <- df
+
+phases_str <- c("Base", "Pre", "Task", "Post", "DBT", "ST", "SST", "CP")
+
+data_te <- readRDS("/Users/christinekuryla/Documents/A_Columbia_Research/MiSBIE/misbie/TE_df_original.RDS") %>% 
+  mutate(phase = as.factor(phase)) %>% 
+  mutate(phase = factor(phase, levels = c("base", "pre", "task", "post", "DBT", "ST", "SST", "CP"))) %>% 
+  rename(Phase = phase) %>% 
+  mutate(Phase = case_match(Phase,
+                           "task" ~ "Task",
+                           "pre" ~ "Pre",
+                           "post" ~ "Post",
+                           "base" ~ "Base",
+                           .default = as.character(Phase))) %>% 
+  mutate(Phase = factor(Phase, levels = phases_str))
+         
+  
+directions_str <- c("Hr_to_Bp", "Bp_to_Hr", "Hr_to_Rsp", "Rsp_to_Hr", "Bp_to_Rsp", "Rsp_to_Bp")
+directions_fct <- factor(directions_str, levels = directions_str)
+
+```
+
+```{r hist_plotly}
+
+# Density plot by TE direction
+plot_density_direction <- ggplot(data_te, aes(x = TE_value, fill = Direction)) +
+  geom_density(position = "identity", alpha = 0.5, bins = 30) +
+  theme_minimal() +
+  labs(x = "TE Value", y = "Count", title = "Density Plot of TE Values Grouped by Direction") +
+#  facet_wrap( ~Direction) +
+  theme(legend.title = element_blank()) 
+
+ggplotly(plot_density_direction)
+
+ggplot(data_te, aes(x = TE_value, fill = Direction)) +
+  geom_boxplot(alpha = 0.5) +
+  theme_minimal() +
+  labs(x = "TE Value", y = "Count", title = "Box Plot of TE Values by Direction")
+
+# Density plot by subject status
+plot_density_status <- ggplot(data_te, aes(x = TE_value, fill = Status)) +
+  geom_density(position = "identity", alpha = 0.5, bins = 30) +
+  theme_minimal() +
+  labs(x = "TE Value", y = "Count", title = "Density Plot of TE Values Grouped by Status") +
+#  facet_wrap( ~Direction) +
+  theme(legend.title = element_blank()) 
+
+ggplotly(plot_density_status)
+
+ggplot(data_te, aes(x = TE_value, fill = Status)) +
+  geom_boxplot(alpha = 0.5) +
+  theme_minimal() +
+  labs(x = "TE Value", y = "Count", title = "Box Plot of TE Values by Status")
+
+# Density plot by period
+plot_density_Phase <- ggplot(data_te, aes(x = TE_value, fill = Phase)) +
+  geom_density(position = "identity", alpha = 0.5, bins = 30) +
+  theme_minimal() +
+  labs(x = "TE Value", y = "Count", title = "Density Plot of TE Values Grouped by Phase") +
+#  facet_wrap( ~Direction) +
+  theme(legend.title = element_blank()) 
+
+ggplotly(plot_density_Phase)
+
+ggplot(data_te, aes(x = TE_value, fill = Phase)) +
+  geom_boxplot(alpha = 0.5) +
+  theme_minimal() +
+  labs(x = "TE Value", y = "Count", title = "Box Plot of TE Values by Phase")
+
+
+# TE value by Phase faceted by direction
+plot_density_Phase_direction <- ggplot(data_te, aes(x = TE_value, fill = Phase)) +
+  geom_density(position = "identity", alpha = 0.5, bins = 30) +
+  theme_minimal() +
+  labs(x = "TE Value", y = "Count", title = "Density Plot of TE Values Grouped by Phase") +
+  facet_wrap( ~Direction) +
+  theme(legend.title = element_blank()) 
+
+ggplotly(plot_density_Phase_direction)
+
+ggplot(data_te, aes(x = TE_value, fill = Phase)) +
+  geom_boxplot(alpha = 0.5) +
+  theme_minimal() +
+  labs(x = "TE Value", y = "Count", title = "Box Plot of TE Values") +
+  facet_wrap( ~Direction) 
+
+
+# TE value by Status faceted by Phase
+plot_density_Phase_status <- ggplot(data_te, aes(x = TE_value, fill = Status)) +
+  geom_density(position = "identity", alpha = 0.5, bins = 30) +
+  theme_minimal() +
+  labs(x = "TE Value", y = "Count", title = "Density Plot of TE Values Grouped by Phase") +
+  facet_wrap( ~Phase) +
+  theme(legend.title = element_blank()) 
+
+ggplotly(plot_density_Phase_status)
+
+ggplot(data_te, aes(x = TE_value, fill = Status)) +
+  geom_boxplot(alpha = 0.5) +
+  theme_minimal() +
+  labs(x = "TE Value", y = "Count", title = "Box Plot of TE Values") +
+  facet_wrap( ~Phase) 
+
+ggplot(data_te %>% filter(Direction == "Bp_to_Hr"), aes(x = TE_value, fill = Status)) +
+  geom_boxplot(alpha = 0.5) +
+  theme_minimal() +
+  labs(x = "TE Value", y = "Count", title = "Box Plot of TE Values for One Direction") +
+  facet_wrap( ~Phase) 
+
+
+
+```
+
+# Plot values
+
+```{r plots}
+
+data_te %>% ggplot(aes(x = Phase, y = TE_value, color = Direction)) +
+  geom_point() +
+  geom_jitter() 
+
+data_te %>% ggplot(aes(x = Phase, y = TE_value, color = Direction)) +
+  geom_boxplot()
+
+data_te %>% ggplot(aes(x = Direction, y = TE_value, color = Phase)) +
+  geom_boxplot()
+
+data_te %>% ggplot(aes(x = Direction, y = TE_value, color = Status)) +
+  geom_boxplot() +
+ # geom_jitter() +
+  facet_wrap(~Phase)
+
+data_te %>% ggplot(aes(x = Status, y = TE_value, color = Phase)) +
+  geom_boxplot() +
+ # geom_jitter() +
+  facet_wrap(~Direction)
+
+```
+
+
+# Explore ICC 
+
+```{r icc, warning=FALSE}
+
+# ICCest(Status, TE_value, data = data_te)
+# ICCest(Direction, TE_value, data = data_te)
+# ICCest(id, TE_value, data = data_te)
+# ICCest(Type, TE_value, data = data_te)
+# ICCest(Phase, TE_value, data = data_te)
+
+#ICCest(id, TE_value, data = data_te %>% filter(Phase == "post") %>% filter(Type == "Hr<>Bp"))
+
+variables <- c("id", "Status", "Direction", "Type", "Phase")
+
+# Initialize an empty dataframe to store results
+icc_df <- data.frame(Variable = character(), ICC = numeric(), LowerCI = numeric(), UpperCI = numeric(), N = integer(), k = integer(), varw = numeric(), vara = numeric(), stringsAsFactors = FALSE)
+
+# Loop through each variable and run ICCest
+for (var in variables) {
+  result <- ICCest(var, TE_value, data = data_te)
+  # Add the results to the dataframe
+  icc_df <- rbind(icc_df, data.frame(Variable = var, ICC = result$ICC, LowerCI = result$LowerCI, UpperCI = result$UpperCI, N = result$N, k = result$k, varw = result$varw, vara = result$vara))
+}
+
+knitr::kable(icc_df, caption = "ICC (all phases together)")
+
+icc_df_phase <- data.frame()
+
+for (phase in unique(data_te$Phase)){
+  icc_df_phase <- rbind(icc_df_phase, data.frame(Phase = phase, 
+                                                 id = ICCest(id, TE_value, data = data_te %>% filter(Phase == phase))$ICC,
+                                                 Status = ICCest(Status, TE_value, data = data_te %>% filter(Phase == phase))$ICC,
+                                                 Direction = ICCest(Direction, TE_value, data = data_te %>% filter(Phase == phase))$ICC,
+                                                 Type = ICCest(Type, TE_value, data = data_te %>% filter(Phase == phase))$ICC
+                                                   ))
+  }
+
+knitr::kable(icc_df_phase, caption = "ICC for each Phase")
+
+```
+
+
+```{r}
+ggplot(data_te, aes(x = TE_value, fill = Direction)) +
+  geom_density(position = "identity", alpha = 0.5, bins = 30) +
+ # scale_fill_brewer(palette = "Set1") + # Use a predefined color palette
+  theme_minimal() +
+  labs(x = "TE Value", y = "Count", title = "Histogram of TE Values Grouped by Status") +
+#  facet_wrap( ~Direction) +
+  theme(legend.title = element_blank()) # Remove legend title if desired
+
+```
+
+
+# Mixed models
+
+```{r mixed_models}
+# To easily look at output
+coeff_md_vs_control <- function(model){
+  
+beta.RI.deletion <- summary(model)$coefficients[2,1] #[(c+1),1]
+se.RI.deletion   <- summary(model)$coefficients[2,2] #[(c+1),2]
+lci.RI.deletion  <- beta.RI.deletion - 1.96*se.RI.deletion
+uci.RI.deletion  <- beta.RI.deletion + 1.96*se.RI.deletion
+coef.RI.deletion <- paste0(round(beta.RI.deletion,3), " (95% CI: ", round(lci.RI.deletion,3), 
+                     ", ", round(uci.RI.deletion,3), ")")
+coef.RI.deletion 
+
+beta.RI.mutation <- summary(model)$coefficients[3,1] #[(c+1),1]
+se.RI.mutation   <- summary(model)$coefficients[3,2] #[(c+1),2]
+lci.RI.mutation  <- beta.RI.mutation - 1.96*se.RI.mutation
+uci.RI.mutation  <- beta.RI.mutation + 1.96*se.RI.mutation
+coef.RI.mutation <- paste0(round(beta.RI.mutation,3), " (95% CI: ", round(lci.RI.mutation,3), 
+                     ", ", round(uci.RI.mutation,3), ")")
+coef.RI.mutation 
+  
+output_string <- paste0("Deletion vs Control: ", coef.RI.deletion, 
+                        "\n", "Mutation vs Control: ", coef.RI.mutation)
+
+cat(output_string)
+
+}
+```
+
+
+```{r mixed_models_all}
+# Most intuitive mixed model with random intercepts for Phase, TE direction, and subject
+
+mod.RI <- lmer(scale(TE_value) ~ Status +              # exposure
+                      (1|Phase) +
+                      (1|Direction) +
+                      (1|Type) +
+                      (1|id),                       # random intercept for each subject
+                    data = data_te) 
+summary(mod.RI)
+summary(mod.RI)$coefficients
+coeff_md_vs_control(mod.RI)
+```
+
+```{r mixed_models_all_RIs}
+# Most intuitive mixed model with random intercepts for Phase, TE direction, and subject
+
+mod.RI_2 <- lmer(scale(TE_value) ~ Status +              # exposure
+                      Phase +
+                      Direction +
+                      Phase*Direction +
+                    #  Status*Direction +
+                    #  Phase*Status +
+                      (1|id),                       # random intercept for each subject
+                    data = data_te) 
+summary(mod.RI_2)
+summary(mod.RI_2)$coefficients
+coeff_md_vs_control(mod.RI_2)
+# aov(mod.RI_2)
+
+
+mod.linear <- lm(scale(TE_value) ~ #Status +              # exposure
+                   #   Phase +
+                      Direction,# +
+                   #   Phase*Direction +
+                    #  Status*Direction +
+                    #  Phase*Status +
+                   #   id,                       
+                    data = data_te) 
+
+summary(mod.linear)
+
+```
+
+```{r mixed_models_each_phase}
+# Just look in base
+mod.RI_base <- lmer(scale(TE_value) ~ Status +              # exposure
+                    #  Phase +
+                      (1|Direction) +
+                      (1|id),                       # random intercept for each subject
+                    data = data_te %>% filter(Phase == "base")) 
+#summary(mod.RI)
+summary(mod.RI_base)$coefficients
+coeff_md_vs_control(mod.RI_base)
+
+# Just look in post
+mod.RI_post <- lmer(scale(TE_value) ~ Status +              # exposure
+                    #  Phase +
+                      (1|Direction) +
+                      (1|id),                       # random intercept for each subject
+                    data = data_te %>% filter(Phase == "post")) 
+#summary(mod.RI_post)
+summary(mod.RI_post)$coefficients
+coeff_md_vs_control(mod.RI_post)
+
+
+
+```
+
+## Compare mixed models
+
+### Scaled TE
+
+```{r compare_mixed_models_scaled}
+
+table(data_te$Phase)
+table(data_te$Direction)
+
+# data_te <- data_te_orig
+
+# Make models for each period
+
+mod_base <- lmer(scale(TE_value) ~ Status + (1|Direction) + (1|id),
+                    data = data_te %>% filter(Phase == "Base")) 
+mod_pre <- lmer(scale(TE_value) ~ Status + (1|Direction) + (1|id),
+                    data = data_te %>% filter(Phase == "Pre")) 
+mod_task <- lmer(scale(TE_value) ~ Status + (1|Direction) + (1|id),
+                    data = data_te %>% filter(Phase == "Task")) 
+mod_post <- lmer(scale(TE_value) ~ Status + (1|Direction) + (1|id),
+                    data = data_te %>% filter(Phase == "Post")) 
+mod_dbt <- lmer(scale(TE_value) ~ Status + (1|Direction) + (1|id),
+                    data = data_te %>% filter(Phase == "DBT")) 
+mod_st <- lmer(scale(TE_value) ~ Status + (1|Direction) + (1|id),
+                    data = data_te %>% filter(Phase == "ST")) 
+mod_sst <- lmer(scale(TE_value) ~ Status + (1|Direction) + (1|id),
+                    data = data_te %>% filter(Phase == "SST")) 
+mod_cp <- lmer(scale(TE_value) ~ Status + (1|Direction) + (1|id),
+                    data = data_te %>% filter(Phase == "CP")) 
+mod_all <- lmer(scale(TE_value) ~ Status + (1|Direction) + (1|id),
+                    data = data_te) 
+
+
+# Placeholder names for models
+models <- list(mod_base, mod_pre, mod_task, mod_post, mod_dbt, mod_st, mod_sst, mod_cp, mod_all, mod.RI)
+model_names <- c("Base", "Pre", "Task", "Post", "DBT", "ST", "SST", "CP", "All Periods", "3 RIs")
+
+# Initialize an empty data frame to store results
+df <- data.frame(Model = character(), Coefficient = character(), Estimate = numeric(), Lower = numeric(), Upper = numeric())
+
+# Loop through each model to extract the coefficients and CIs
+for (i in seq_along(models)) {
+  conf_int <- confint(models[[i]], level = 0.95)[c("StatusDeletion", "StatusMutation"), ] # Assuming confint() works for your model objects
+  coef <- fixef(models[[i]])[c("StatusDeletion", "StatusMutation")] # Assuming these are fixed effects
+  
+  # Combine into a data frame
+  temp_df <- data.frame(
+    Model = model_names[i],
+    Coefficient = names(coef),
+    Estimate = coef,
+    Lower = conf_int[, 1],
+    Upper = conf_int[, 2]
+  )
+  
+  # Bind to the main data frame
+  df <- rbind(df, temp_df)
+}
+
+# Check the combined data frame
+print(df)
+
+df <- df %>% mutate(Coefficient = case_match(Coefficient,
+                                            "StatusDeletion" ~ "Deletion",
+                                            "StatusMutation" ~ "Mutation"))
+df$Model <- factor(df$Model, levels = model_names)
+
+ggplot(df, aes(x = Estimate, y = Coefficient, group = Model, color = Model)) +
+  geom_point(position = position_dodge(width = 0.75)) + # Adjust dodge width for vertical layout
+  geom_errorbarh(aes(xmin = Lower, xmax = Upper), height = 0.2, position = position_dodge(width = 0.75)) + # Horizontal error bars
+  geom_vline(xintercept = 0, linetype = "dashed", color = "black") + # Vertical dashed line at x=0 for reference
+  theme_minimal() + # Use a minimal theme
+  labs(x = "Estimate", y = "Coefficient", title = "Mixed Linear Model Coefficients with 95% CI") +
+  theme(axis.text.y = element_text(angle = 0)) # Ensure y-axis labels are horizontal for readability
+
+
+# Previous code remains the same up to the point where we create the 'df' dataframe
+# Previous code remains the same up to the point where we create the 'df' dataframe
+
+# Remove the '3 RI' model
+df <- df[df$Model != "3 RIs", ]
+
+# Define the desired order of periods (reversed)
+period_order <- rev(c("Base", "Pre", "Task", "Post", "DBT", "ST", "SST", "CP", "All Periods"))
+
+# Convert Model to a factor with the specified order
+df$Model <- factor(df$Model, levels = period_order)
+
+# Split the dataframe into two: one for Mutation and one for Deletion
+df_mutation <- df[df$Coefficient == "Mutation", ]
+df_deletion <- df[df$Coefficient == "Deletion", ]
+
+# Create the Mutation plot
+p_mutation <- ggplot(df_mutation, aes(x = Estimate, y = Model, color = Model)) +
+  geom_point(position = position_dodge(width = 0.75)) +
+  geom_errorbarh(aes(xmin = Lower, xmax = Upper), height = 0.2, position = position_dodge(width = 0.75)) +
+  geom_vline(xintercept = 0, linetype = "dashed", color = "black") +
+  theme_minimal() +
+  labs(x = "Estimate", y = "Phase", title = "Mixed Linear Model Coefficients with 95% CI - Mutation") +
+  theme(axis.text.y = element_text(angle = 0),
+        legend.position = "none")
+
+# Create the Deletion plot
+p_deletion <- ggplot(df_deletion, aes(x = Estimate, y = Model, color = Model)) +
+  geom_point(position = position_dodge(width = 0.75)) +
+  geom_errorbarh(aes(xmin = Lower, xmax = Upper), height = 0.2, position = position_dodge(width = 0.75)) +
+  geom_vline(xintercept = 0, linetype = "dashed", color = "black") +
+  theme_minimal() +
+  labs(x = "Estimate", y = "Phase", title = "Mixed Linear Model Coefficients with 95% CI - Deletion") +
+  theme(axis.text.y = element_text(angle = 0),
+        legend.position = "none")
+
+# Display the plots
+print(p_mutation)
+print(p_deletion)
+
+knitr::kable(df)
+
+# If you want to save the plots, you can use ggsave:
+# ggsave("mutation_plot.png", p_mutation, width = 10, height = 6)
+# ggsave("deletion_plot.png", p_deletion, width = 10, height = 6)
+
+
+# a <- lapply(models, coeff_md_vs_control)
+# 
+# for (model in models){
+#   coeff_md_vs_control(model)
+# }
+
+```
+
+## Linear Model Each Direction Separately
+
+
+
+```{r linear_for_each_direction}
+
+library(tidyverse)
+library(broom)
+
+# List of directions
+directions <- c("Bp_to_Hr", "Hr_to_Bp", "Bp_to_Rsp", "Rsp_to_Bp", "Hr_to_Rsp", "Rsp_to_Hr")
+
+# List of statuses
+statuses <- c("Mutation", "Deletion")
+
+# List of phases
+phases <- c("Base", "Pre", "Task", "Post", "DBT", "ST", "SST", "CP")
+
+# Function to create and summarize model
+create_model <- function(direction, status, phase) {
+  model <- lm(scale(TE_value) ~ Status, 
+              data = data_te %>% 
+                filter(Direction == direction, 
+                       Status %in% c("Control", status),
+                       Phase == phase))
+  
+  tidy_result <- tidy(model, conf.int = TRUE) %>%
+    filter(term == paste0("Status", status))
+  
+  data.frame(
+    Direction = direction,
+    Status = status,
+    Phase = phase,
+    Estimate = tidy_result$estimate,
+    Lower = tidy_result$conf.low,
+    Upper = tidy_result$conf.high
+  )
+}
+
+# Create empty dataframe to store results
+results <- data.frame()
+
+# Loop through each combination and create models
+for (direction in directions) {
+  for (status in statuses) {
+    for (phase in phases) {
+      model_result <- create_model(direction, status, phase)
+      results <- rbind(results, model_result)
+    }
+  }
+}
+
+# Create plots
+create_plot <- function(data, title) {
+  ggplot(data, aes(x = Estimate, y = Phase, color = Direction)) +
+    geom_point(position = position_dodge(width = 0.75)) +
+    geom_errorbarh(aes(xmin = Lower, xmax = Upper), height = 0.2, 
+                   position = position_dodge(width = 0.75)) +
+    geom_vline(xintercept = 0, linetype = "dashed", color = "black") +
+    theme_minimal() +
+    labs(x = "Estimate", y = "Phase", title = title) +
+    theme(axis.text.y = element_text(angle = 0))
+}
+
+# Create and display mutation plot
+mutation_plot <- create_plot(
+  results %>% filter(Status == "Mutation"),
+  "Linear Model Coefficients with 95% CI - Mutation"
+)
+print(mutation_plot)
+
+# Create and display deletion plot
+deletion_plot <- create_plot(
+  results %>% filter(Status == "Deletion"),
+  "Linear Model Coefficients with 95% CI - Deletion"
+)
+print(deletion_plot)
+
+# If you want to save the plots, you can use ggsave:
+# ggsave("mutation_plot.png", mutation_plot, width = 12, height = 8)
+# ggsave("deletion_plot.png", deletion_plot, width = 12, height = 8)
+
+# Function to create plot for a specific direction and status
+create_direction_plot <- function(data, direction, status) {
+  ggplot(data %>% filter(Direction == direction, Status == status), 
+         aes(x = Estimate, y = Phase)) +
+    geom_point() +
+    geom_errorbarh(aes(xmin = Lower, xmax = Upper), height = 0.2) +
+    geom_vline(xintercept = 0, linetype = "dashed", color = "black") +
+    theme_minimal() +
+    labs(x = "Estimate", y = "Phase", 
+         title = paste("Linear Model Coefficients with 95% CI -", status),
+         subtitle = paste("Direction:", direction)) +
+    theme(axis.text.y = element_text(angle = 0))
+}
+
+# Create and save plots for each direction and status
+for (direction in directions) {
+  for (status in statuses) {
+    plot <- create_direction_plot(results, direction, status)
+    print(plot)
+    
+    # Uncomment the following line if you want to save the plots
+    # ggsave(paste0(direction, "_", status, "_plot.png"), plot, width = 10, height = 6)
+  }
+}
+
+###############
+library(tidyverse)
+library(broom)
+library(gridExtra)
+
+# List of directions
+directions <- c("Bp_to_Hr", "Hr_to_Bp", "Bp_to_Rsp", "Rsp_to_Bp", "Hr_to_Rsp", "Rsp_to_Hr")
+
+# List of statuses
+statuses <- c("Mutation", "Deletion")
+
+# List of phases
+phases <- c("Base", "Pre", "Task", "Post", "DBT", "ST", "SST", "CP")
+
+# Function to create and summarize model
+create_model <- function(direction, status, phase) {
+  model <- lm(scale(TE_value) ~ Status, 
+              data = data_te %>% 
+                filter(Direction == direction, 
+                       Status %in% c("Control", status),
+                       Phase == phase))
+  
+  tidy_result <- tidy(model, conf.int = TRUE) %>%
+    filter(term == paste0("Status", status))
+  
+  data.frame(
+    Direction = direction,
+    Status = status,
+    Phase = phase,
+    Estimate = tidy_result$estimate,
+    Lower = tidy_result$conf.low,
+    Upper = tidy_result$conf.high
+  )
+}
+
+# Create empty dataframe to store results
+results <- data.frame()
+
+# Loop through each combination and create models
+for (direction in directions) {
+  for (status in statuses) {
+    for (phase in phases) {
+      model_result <- create_model(direction, status, phase)
+      results <- rbind(results, model_result)
+    }
+  }
+}
+
+results$Phase <- factor(results$Phase, levels = rev(phases))
+
+# Function to format direction for title
+format_direction <- function(direction) {
+  direction <- toupper(direction)
+  direction <- gsub("_TO_", " to ", direction)
+  direction <- gsub("_", " ", direction)
+  return(direction)
+}
+
+# Function to create plot for a specific direction and status
+create_direction_plot <- function(data, direction, status) {
+  ggplot(data %>% filter(Direction == direction, Status == status), 
+         aes(x = Estimate, y = Phase, color = Phase)) +
+    geom_point() +
+    geom_errorbarh(aes(xmin = Lower, xmax = Upper), height = 0.2) +
+    geom_vline(xintercept = 0, linetype = "dashed", color = "black") +
+    theme_minimal() +
+    labs(x = "Estimate", y = "Phase", 
+         title = paste("Direction:", format_direction(direction))) +
+    theme(axis.text.y = element_text(angle = 0),
+          legend.position = "none")
+}
+
+# Create plots for Mutation
+mutation_plots <- lapply(directions, function(dir) {
+  create_direction_plot(results, dir, "Mutation")
+})
+
+# Create plots for Deletion
+deletion_plots <- lapply(directions, function(dir) {
+  create_direction_plot(results, dir, "Deletion")
+})
+
+# Arrange Mutation plots in a 3x2 grid
+mutation_grid <- do.call(grid.arrange, c(mutation_plots, ncol = 2, 
+                                         top = "Linear Model Coefficients with 95% CI - Mutation"))
+
+# Arrange Deletion plots in a 3x2 grid
+deletion_grid <- do.call(grid.arrange, c(deletion_plots, ncol = 2, 
+                                         top = "Linear Model Coefficients with 95% CI - Deletion"))
+
+# Display the grids
+print(mutation_grid)
+print(deletion_grid)
+
+# If you want to save the grids, you can use ggsave:
+# ggsave("mutation_grid.png", mutation_grid, width = 15, height = 20)
+# ggsave("deletion_grid.png", deletion_grid, width = 15, height = 20)
+
+knitr::kable(results)
+
+```
+
+
+### Unscaled TE 
+
+```{r compare_mixed_models_unscaled, include=FALSE}
+
+table(data_te$Phase)
+
+# Make models for each period
+
+# not scaled
+
+mod_base <- lmer(TE_value ~ Status + (1|Direction) + (1|id),
+                    data = data_te %>% filter(Phase == "base")) 
+mod_pre <- lmer(TE_value ~ Status + (1|Direction) + (1|id),
+                    data = data_te %>% filter(Phase == "pre")) 
+mod_task <- lmer(TE_value ~ Status + (1|Direction) + (1|id),
+                    data = data_te %>% filter(Phase == "task")) 
+mod_post <- lmer(TE_value ~ Status + (1|Direction) + (1|id),
+                    data = data_te %>% filter(Phase == "post")) 
+mod_dbt <- lmer(TE_value ~ Status + (1|Direction) + (1|id),
+                    data = data_te %>% filter(Phase == "DBT")) 
+mod_st <- lmer(TE_value ~ Status + (1|Direction) + (1|id),
+                    data = data_te %>% filter(Phase == "ST")) 
+mod_sst <- lmer(TE_value ~ Status + (1|Direction) + (1|id),
+                    data = data_te %>% filter(Phase == "SST")) 
+mod_cp <- lmer(TE_value ~ Status + (1|Direction) + (1|id),
+                    data = data_te %>% filter(Phase == "CP")) 
+mod_all <- lmer(TE_value ~ Status + (1|Direction) + (1|id),
+                    data = data_te) 
+
+# Placeholder names for models
+models <- list(mod_base, mod_pre, mod_task, mod_post, mod_dbt, mod_st, mod_sst, mod_cp, mod_all, mod.RI)
+model_names <- c("Base", "Pre", "Task", "Post", "DBT", "ST", "SST", "CP", "All Periods", "3 RIs")
+
+# Initialize an empty data frame to store results
+df <- data.frame(Model = character(), Coefficient = character(), Estimate = numeric(), Lower = numeric(), Upper = numeric())
+
+# Loop through each model to extract the coefficients and CIs
+for (i in seq_along(models)) {
+  conf_int <- confint(models[[i]], level = 0.95)[c("StatusDeletion", "StatusMutation"), ] # Assuming confint() works for your model objects
+  coef <- fixef(models[[i]])[c("StatusDeletion", "StatusMutation")] # Assuming these are fixed effects
+  
+  # Combine into a data frame
+  temp_df <- data.frame(
+    Model = model_names[i],
+    Coefficient = names(coef),
+    Estimate = coef,
+    Lower = conf_int[, 1],
+    Upper = conf_int[, 2]
+  )
+  
+  # Bind to the main data frame
+  df <- rbind(df, temp_df)
+}
+
+# Check the combined data frame
+print(df)
+
+df <- df %>% mutate(Coefficient = case_match(Coefficient,
+                                            "StatusDeletion" ~ "Deletion",
+                                            "StatusMutation" ~ "Mutation"))
+df$Model <- factor(df$Model, levels = model_names)
+
+ggplot(df, aes(x = Estimate, y = Coefficient, group = Model, color = Model)) +
+  geom_point(position = position_dodge(width = 0.75)) + # Adjust dodge width for vertical layout
+  geom_errorbarh(aes(xmin = Lower, xmax = Upper), height = 0.2, position = position_dodge(width = 0.75)) + # Horizontal error bars
+  geom_vline(xintercept = 0, linetype = "dashed", color = "black") + # Vertical dashed line at x=0 for reference
+  theme_minimal() + # Use a minimal theme
+  labs(x = "Estimate", y = "Coefficient", title = "Mixed Linear Model Coefficients with 95% CI") +
+  theme(axis.text.y = element_text(angle = 0)) # Ensure y-axis labels are horizontal for readability
+
+a <- lapply(models, coeff_md_vs_control)
+
+for (model in models){
+  coeff_md_vs_control(model)
+}
+
+```
+
+
+```{r linear_model, include=FALSE}
+
+linear_model_direction <- function(dir, data_te) {
+  data_te_dir <- filter(data_te, Direction == dir)
+
+  # Adjusted model fitting using lm() instead of lmer(), fitting models for different phases
+  phases <- c("base", "pre", "task", "post", "DBT", "ST", "SST", "CP", "All Periods")
+  models <- lapply(phases, function(phase) {
+    if (phase != "All Periods") {
+      lm(scale(TE_value) ~ Status, data = filter(data_te_dir, Phase == phase))
+    } else {
+      lm(scale(TE_value) ~ Status, data = data_te_dir)
+    }
+  })
+
+  model_names <- phases
+
+  # Initialize an empty data frame to store results
+  df <- data.frame(Model = character(), Coefficient = character(), Estimate = numeric(), Lower = numeric(), Upper = numeric(), stringsAsFactors = FALSE)
+
+  # Loop through each model to extract the coefficients and CIs
+  for (i in seq_along(models)) {
+    conf_int <- confint(models[[i]])
+    coef_summary <- summary(models[[i]])$coefficients
+    
+    # Extracting for both 'Deletion' and 'Mutation' coefficients
+    temp_df <- data.frame(
+      Model = rep(model_names[i], 2),
+      Coefficient = c("Deletion", "Mutation"),
+      Estimate = coef_summary[c("StatusDeletion", "StatusMutation"), "Estimate"],
+      Lower = conf_int[c("StatusDeletion", "StatusMutation"), 1],
+      Upper = conf_int[c("StatusDeletion", "StatusMutation"), 2]
+    )
+    
+    # Bind to the main data frame
+    df <- rbind(df, temp_df)
+  }
+
+  df$Model <- factor(df$Model, levels = model_names)
+
+  # Plotting
+  p <- ggplot(df, aes(x = Estimate, y = Coefficient, group = Model, color = Model)) +
+    geom_point(position = position_dodge(width = 0.75)) +
+    geom_errorbarh(aes(xmin = Lower, xmax = Upper), height = 0.2, position = position_dodge(width = 0.75)) +
+    geom_vline(xintercept = 0, linetype = "dashed", color = "black") +
+    theme_minimal() +
+    labs(x = "Estimate", y = "Coefficient", title = paste(dir, ": Linear Model Coefficients with 95% CI -")) +
+    theme(axis.text.y = element_text(angle = 0))
+  
+  ## Plot
+  plot(p)
+  
+  ## Kable 
+  
+  knitr::kable(df, caption = dir)
+}
+
+data_te
+
+# Each Direction
+linear_model_direction("Hr_to_Bp", data_te = data_te)
+linear_model_direction("Bp_to_Hr", data_te = data_te)
+linear_model_direction("Hr_to_Rsp", data_te = data_te)
+linear_model_direction("Rsp_to_Hr", data_te = data_te)
+linear_model_direction("Rsp_to_Bp", data_te = data_te)
+linear_model_direction("Bp_to_Rsp", data_te = data_te)
+
+```
+
+Mixed Model by Phase, reference rest
+
+```{r mm_by_phase_ref_rest}
+
+# by phase: reference = rest 
+
+library(lme4)
+mod_CP <- lmer(TE_value ~ CP + (1|id),
+                    data = data_te %>% 
+                              filter(Direction == "Bp_to_Hr") %>% 
+                              mutate(CP = if_else(Phase == "CP", "CP", "Z")) %>% 
+                              mutate(CP = as.factor(CP))
+                  ) 
+
+# For each TE direction, we will run a mixed effects model on each period with the rest of the periods as the reference period. The following creates the appropriate model.
+
+make_model_RI_period <- function(period, direction){
+  mod <- lmer(scale(TE_value) ~ period + (1|id),
+                    data = data_te %>% 
+                              filter(Direction == direction) %>% 
+                              mutate(period = if_else(Phase == period, period, "Z")) %>% 
+                              mutate(period = as.factor(period))
+                  ) 
+  return(mod)
+}
+
+
+
+confint(make_model_RI_period("Post", "Bp_to_Hr"))
+confint(make_model_RI_period("CP", "Bp_to_Hr"))
+summary(make_model_RI_period("CP", "Bp_to_Hr"))$coefficients
+summary(make_model_RI_period("CP", "Bp_to_Hr"))
+#summary(make_model_RI_period("post", "Bp_to_Hr"))
+#summary(make_model_RI_period("post", "Bp_to_Hr"))
+
+
+
+```
+
+```{r mm_by_phase_ref_rest_plot}
+
+#phases_str <- unique(data_te$Phase)
+#directions_str <- unique(data_te$Direction)
+
+
+
+  # Initialize an empty data frame to store results
+  df <- data.frame(Direction = character(), 
+                   Phase = character(),
+                   Coefficient = character(), 
+                   Estimate = numeric(), 
+                   Std_Err = numeric(), 
+                   t_value = numeric(), 
+                   Lower = numeric(), 
+                   Upper = numeric(), stringsAsFactors = FALSE)
+
+  # Loop through each model to extract the coefficients and CIs
+ for (direction in directions_fct){
+   for(phase in phases_str){
+    
+    mod <- make_model_RI_period(phase, direction)
+    
+    conf_int <- confint(mod)
+    coef_summary <- summary(mod)$coefficients
+    
+    # Extracting for both 'Deletion' and 'Mutation' coefficients
+    temp_df <- data.frame(
+      Direction = direction,
+      Phase = phase,
+  #    Model = rep(model_names[i], 2),
+      Coefficient = phase,#c("Deletion", "Mutation"),
+      Estimate = coef_summary["periodZ", "Estimate"],
+      Std_Err = coef_summary["periodZ", "Std. Error"],
+      t_value = coef_summary["periodZ", "t value"],
+      Lower = conf_int["periodZ", 1],
+      Upper = conf_int["periodZ", 2]
+    )
+    
+    # Bind to the main data frame
+    df <- rbind(df, temp_df)
+  }
+ }
+
+df <- df %>% 
+  mutate(Direction = factor(Direction, levels = directions_fct)) %>% 
+  mutate(Phase = factor(Phase, levels = rev(phases_str))) %>% 
+  mutate(Coefficient = factor(Coefficient, levels = rev(phases_str)))
+  
+phase_df <- df 
+
+###### Plot
+
+# Function to format direction for title
+format_direction <- function(direction) {
+  direction <- toupper(direction)
+  direction <- gsub("_TO_", " to ", direction)
+  direction <- gsub("_", " ", direction)
+  return(direction)
+}
+
+make_plot_on_period <- function(direction){
+    p <- ggplot(phase_df %>% filter(Direction == direction), 
+              aes(x = Estimate, y = Coefficient, group = phase, color = Coefficient)) +
+    geom_point(position = position_dodge(width = 0.75)) +
+    geom_errorbarh(aes(xmin = Lower, xmax = Upper), height = 0.2, position = position_dodge(width = 0.75)) +
+    geom_vline(xintercept = 0, linetype = "dashed", color = "black") +
+    theme_minimal() +
+    labs(x = "Estimate", y = "Coefficient", 
+         title = "Phase Coefficient",
+         subtitle = format_direction(direction)) +
+        # title = paste0("Phase Coefficient ", "(", format_direction(direction), ")")) + #, 
+         #subtitle ="Coefficients with 95% CI") +
+    theme(axis.text.y = element_text(angle = 0),
+          legend.position = "none")
+    
+  return(p)
+}
+
+
+
+library(gridExtra)
+grid.arrange(make_plot_on_period("Bp_to_Hr"),
+make_plot_on_period("Hr_to_Bp"),
+make_plot_on_period("Rsp_to_Hr"),
+make_plot_on_period("Hr_to_Rsp"),
+make_plot_on_period("Bp_to_Rsp"),
+make_plot_on_period("Rsp_to_Bp"),
+nrow = 3)
+  
+  ## Plot
+  plot(p)
+  
+  ## Kable 
+  
+knitr::kable(df)
+  
+  
+  
+  
+make_plot_on_direction <- function(period){
+    p <- ggplot(phase_df %>% filter(Phase == period), 
+              aes(x = Estimate, y = Coefficient, group = Direction, color = Direction)) +
+    geom_point(position = position_dodge(width = 0.75)) +
+    geom_errorbarh(aes(xmin = Lower, xmax = Upper), height = 0.2, position = position_dodge(width = 0.75)) +
+    geom_vline(xintercept = 0, linetype = "dashed", color = "black") +
+    theme_minimal() +
+    labs(x = "Estimate", y = "Coefficient", 
+         title = paste0("Direction Coefficient ", "(", period, ")")) + #, 
+         #subtitle ="Coefficients with 95% CI") +
+    xlim(-1.5, 1.5) +
+    theme(axis.text.y = element_text(angle = 0))
+    
+  return(p)
+}
+
+library(gridExtra)
+grid.arrange(make_plot_on_direction("Base"),
+make_plot_on_direction("Pre"),
+make_plot_on_direction("Task"),
+make_plot_on_direction("Post"),
+make_plot_on_direction("DBT"),
+make_plot_on_direction("ST"),
+make_plot_on_direction("SST"),
+make_plot_on_direction("CP"), 
+nrow = 4)
+
+  
+knitr::kable(df)
+
+```
+
+
+# Same for each of mutation, deletion, control separate
+
+
+```{r}
+
+library(dplyr)
+library(ggplot2)
+library(gridExtra)
+library(grid)
+
+make_model_RI_period <- function(period, direction, data){
+  mod <- lmer(scale(TE_value) ~ period + (1|id),
+              data = data %>% 
+                filter(Direction == direction) %>% 
+                mutate(period = if_else(Phase == period, period, "Z")) %>% 
+                mutate(period = as.factor(period))
+  ) 
+  return(mod)
+}
+
+create_and_plot_coefficients <- function(data, status = NULL) {
+  # Filter data if status is provided
+  if (!is.null(status)) {
+    data <- data %>% filter(Status == status)
+  }
+  
+  # Initialize an empty data frame to store results
+  df <- data.frame(Direction = character(), 
+                   Phase = character(),
+                   Coefficient = character(), 
+                   Estimate = numeric(), 
+                   Std_Err = numeric(), 
+                   t_value = numeric(), 
+                   Lower = numeric(), 
+                   Upper = numeric(), stringsAsFactors = FALSE)
+  
+  # Loop through each model to extract the coefficients and CIs
+  for (direction in directions_fct) {
+    for (phase in phases_str) {
+      mod <- make_model_RI_period(phase, direction, data)
+      
+      conf_int <- confint(mod)
+      coef_summary <- summary(mod)$coefficients
+      
+      temp_df <- data.frame(
+        Direction = direction,
+        Phase = phase,
+        Coefficient = phase,
+        Estimate = coef_summary["periodZ", "Estimate"],
+        Std_Err = coef_summary["periodZ", "Std. Error"],
+        t_value = coef_summary["periodZ", "t value"],
+        Lower = conf_int["periodZ", 1],
+        Upper = conf_int["periodZ", 2]
+      )
+      
+      # Bind to the main data frame
+      df <- rbind(df, temp_df)
+    }
+  }
+  
+  df <- df %>% 
+    mutate(Direction = factor(Direction, levels = directions_fct)) %>% 
+    mutate(Phase = factor(Phase, levels = rev(phases_str))) %>% 
+    mutate(Coefficient = factor(Coefficient, levels = rev(phases_str)))
+  
+  # Function to format direction for title
+  format_direction <- function(direction) {
+    direction <- toupper(direction)
+    direction <- gsub("_TO_", " to ", direction)
+    direction <- gsub("_", " ", direction)
+    return(direction)
+  }
+  
+  make_plot_on_period <- function(direction) {
+    p <- ggplot(df %>% filter(Direction == direction), 
+                aes(x = Estimate, y = Coefficient, group = Phase, color = Coefficient)) +
+      geom_point(position = position_dodge(width = 0.75)) +
+      geom_errorbarh(aes(xmin = Lower, xmax = Upper), height = 0.2, position = position_dodge(width = 0.75)) +
+      geom_vline(xintercept = 0, linetype = "dashed", color = "black") +
+      theme_minimal() +
+      labs(x = "Estimate", y = "Coefficient", 
+         #  title = "Phase Coefficient",
+           subtitle = format_direction(direction)) +
+      theme(axis.text.y = element_text(angle = 0),
+            legend.position = "none")
+    
+    return(p)
+  }
+  
+  # Create plots
+  plots <- lapply(directions_fct, make_plot_on_period)
+  
+  # Create title
+  title <- if(is.null(status)) "All Subjects" else paste(status, "Subjects")
+  title_grob <- textGrob(title, gp = gpar(fontsize = 16, fontface = "bold"))
+  
+  # Arrange plots in a grid with title
+  grid.arrange(
+    title_grob,
+    do.call(arrangeGrob, c(plots, list(nrow = 3))),
+    heights = c(0.1, 0.9),
+    nrow = 2
+  )
+  
+  # Return the data frame for further use if needed
+  return(df)
+  
+  
+  # # Create plots
+  # plots <- lapply(directions_fct, make_plot_on_period)
+  # 
+  # # Arrange plots in a grid
+  # grid.arrange(grobs = plots, nrow = 3)
+  # 
+  # # Return the data frame for further use if needed
+  # return(df)
+}
+
+# For all subjects
+all_results <- create_and_plot_coefficients(data_te)
+
+# For mutation
+mutation_results <- create_and_plot_coefficients(data_te, status = "Mutation")
+
+# For deletion
+deletion_results <- create_and_plot_coefficients(data_te, status = "Deletion")
+
+# For control
+control_results <- create_and_plot_coefficients(data_te, status = "Control")
+
+
+```
+
+# Separate by direction to compare 
+
+```{r}
+
+
+library(dplyr)
+library(ggplot2)
+library(gridExtra)
+library(grid)
+
+create_and_plot_coefficients_dir <- function(data) {
+  statuses <- c("Control", "Mutation", "Deletion")
+  
+  format_direction <- function(direction) {
+    direction <- toupper(direction)
+    direction <- gsub("_TO_", " to ", direction)
+    direction <- gsub("_", " ", direction)
+    return(direction)
+  }
+  
+  make_plot_on_period <- function(direction, status_data, status) {
+    p <- ggplot(status_data %>% filter(Direction == direction), 
+                aes(x = Estimate, y = Coefficient, group = Phase, color = Coefficient)) +
+      geom_point(position = position_dodge(width = 0.75)) +
+      geom_errorbarh(aes(xmin = Lower, xmax = Upper), height = 0.2, position = position_dodge(width = 0.75)) +
+      geom_vline(xintercept = 0, linetype = "dashed", color = "black") +
+      theme_minimal() +
+      labs(#x = "Estimate", y = "Coefficient", 
+          # axis.text.x = element_blank(), axis.text.y = element_blank(),
+           title = paste(status, "-", format_direction(direction))) +
+      theme(#axis.text.y = element_text(angle = 0),
+            legend.position = "none",
+            plot.title = element_text(size = 10)) +
+      xlab("") +
+      ylab("")
+    
+    return(p)
+  }
+  
+  # Create a list to store all plots
+  all_plots <- list()
+  
+  for (status in statuses) {
+    status_data <- data %>% filter(Status == status)
+    
+    df <- data.frame(Direction = character(), 
+                     Phase = character(),
+                     Coefficient = character(), 
+                     Estimate = numeric(), 
+                     Std_Err = numeric(), 
+                     t_value = numeric(), 
+                     Lower = numeric(), 
+                     Upper = numeric(), 
+                     stringsAsFactors = FALSE)
+    
+    for (direction in directions_fct) {
+      for (phase in phases_str) {
+        mod <- make_model_RI_period(phase, direction, status_data)
+        
+        conf_int <- confint(mod)
+        coef_summary <- summary(mod)$coefficients
+        
+        temp_df <- data.frame(
+          Direction = direction,
+          Phase = phase,
+          Coefficient = phase,
+          Estimate = coef_summary["periodZ", "Estimate"],
+          Std_Err = coef_summary["periodZ", "Std. Error"],
+          t_value = coef_summary["periodZ", "t value"],
+          Lower = conf_int["periodZ", 1],
+          Upper = conf_int["periodZ", 2]
+        )
+        
+        df <- rbind(df, temp_df)
+      }
+    }
+    
+    df <- df %>% 
+      mutate(Direction = factor(Direction, levels = directions_fct)) %>% 
+      mutate(Phase = factor(Phase, levels = rev(phases_str))) %>% 
+      mutate(Coefficient = factor(Coefficient, levels = rev(phases_str)))
+    
+    status_plots <- lapply(directions_fct, function(dir) make_plot_on_period(dir, df, status))
+    all_plots[[status]] <- status_plots
+  }
+  
+
+  # Split directions into two groups
+  directions_split <- split(directions_fct, ceiling(seq_along(directions_fct)/3))
+  
+  # Function to create one 3x3 grid
+  create_grid <- function(directions_group) {
+    plot_grid <- lapply(directions_group, function(dir) {
+      do.call(grid.arrange, c(lapply(statuses, function(status) all_plots[[status]][[which(directions_fct == dir)]]), ncol = 3))
+    })
+    
+    grid.arrange(grobs = plot_grid, ncol = 1)
+  }
+  
+  # Create two 3x3 grids
+  grid1 <- create_grid(directions_split[[1]])
+  grid2 <- create_grid(directions_split[[2]])
+  
+  # Add overall titles
+  title1 <- textGrob("Coefficient Estimates by Direction and Status", gp = gpar(fontsize = 16, fontface = "bold"))
+  title2 <- textGrob("", gp = gpar(fontsize = 16, fontface = "bold"))
+  
+  # Arrange the final grids with titles
+  final_grid1 <- grid.arrange(title1, grid1, heights = c(0.05, 0.95), nrow = 2)
+  final_grid2 <- grid.arrange(title2, grid2, heights = c(0.05, 0.95), nrow = 2)
+  
+  # Display the plots
+  print(final_grid1)
+  print(final_grid2)
+  
+  # Return the plot objects for further customization if needed
+  invisible(list(grid1 = final_grid1, grid2 = final_grid2))
+}
+
+create_and_plot_coefficients_dir(data_te)
+
+
+```
+
+
+# Next
+
+
+```{r table_1}
+
+data_te %>% 
+  group_by(Phase, Status) %>% 
+  summarize(n = n()/6)
+
+```
+
+```{r}
+
+# ... (Your existing code for unscaled models) ...
+
+# Add a column for CI width
+df$CI_Width <- df$Upper - df$Lower
+
+# Visualize CI widths
+ggplot(df, aes(x = CI_Width, fill = Coefficient)) +
+  geom_histogram(binwidth = 0.01) + # Adjust binwidth for visual clarity
+  facet_wrap(~Direction) +
+  theme_minimal() +
+  labs(title = "Distribution of Confidence Interval Widths",
+       x = "CI Width", y = "Frequency")
+
+
+```
+
+
+# Repeated Measures ANOVA
+
+https://statistics.laerd.com/statistical-guides/repeated-measures-anova-statistical-guide.php 
+
+https://www.r-bloggers.com/2021/04/repeated-measures-of-anova-in-r-complete-tutorial/ 
+
+# Windows?
+
+https://chat.openai.com/share/029575ee-494f-4cb9-8b6e-91763d901132
+
+# Make a table of betas and their p value

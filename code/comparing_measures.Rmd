@@ -164,6 +164,12 @@ rsp_hr_dt_summary %>% # 12 + 4 + ACquisition, C3
 
 
 
+hr_rhrv_summary %>% 
+  group_by(period) %>% 
+  summarise(subj = n())
+
+table(hr_rhrv_summary$condition)
+
 ```
 
 
@@ -418,20 +424,26 @@ combined_summary %>%
 
 ```
 
-```{r}
+# T tests and Wilcoxon Signed Rank tests (Mann-Whitney)
+
+```{r t_tests}
+
+
+#library(readr)
+#write_csv(hr_rhrv_summary, "/Users/christinekuryla/Documents/A_Columbia_Research/MiSBIE/misbie/data_processed/hr_rhrv_summary_108_20240614.csv")
 
 library(dplyr)
 library(tidyr)
 library(broom)
+
+combined_summary <- hr_rhrv_summary %>% 
+  filter(condition != "MELAS")
 
 # Assuming df has columns: id, condition, period, and metric
 
 all_metric_names <- colnames(combined_summary %>% 
+                               ungroup() %>% 
                                select(-"id", -"condition", -"period"))
-
-library(dplyr)
-library(tidyr)
-library(broom)
 
 # Assuming df has columns: id, condition, period, and multiple metrics
 # all_metric_names is your vector of metric names
@@ -475,7 +487,9 @@ results_list <- lapply(all_metric_names, function(metric) {
 # Combine all results into one dataframe
 final_results <- bind_rows(results_list)
 
-p_val_per_period <- final_results 
+p_val_per_period <- final_results %>% 
+  filter(Var1 != "Control") %>% 
+  filter(!(Var1 == "Mutation" & Var2 == "Deletion"))
   
 
 # All combined

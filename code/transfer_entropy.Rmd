@@ -52,6 +52,9 @@ ids <- comb_df %>% ungroup() %>% select(id) %>% unique()
 comb_df <- comb_df %>% 
   mutate(period = factor(period, levels = periods_str))
 
+comb_df_apen <- comb_df
+comb_df <- comb_df_apen
+
 ```
 
 In order to calculate transfer entropy of the differences, we need the differences in the time values. Let's append them to the combined dataframe.
@@ -61,12 +64,12 @@ In order to calculate transfer entropy of the differences, we need the differenc
 #comb_df_loaded <- comb_df
 comb_df <- comb_df_loaded
 
-comb_df <- comb_df %>%
-  group_by(id, period) %>%
-  mutate(interval = factor(interval, levels = unique(interval))) %>%
-  mutate(interval = as.integer(interval))
+# comb_df <- comb_df %>%
+#   group_by(id, period) %>%
+#   mutate(interval = factor(interval, levels = unique(interval))) %>%
+#   mutate(interval = as.integer(interval))
 
-comb_df <- comb_df %>% 
+comb_df_8 <- comb_df_8 %>% 
   group_by(id, period) %>%
   mutate(rate_diff = HR - lag(HR),
          pval_diff = BP - lag(BP),
@@ -83,10 +86,97 @@ comb_df_pre_te <- comb_df
 
 ```
 
+# Change period definitions if desired
+
+> periods
+ [1] "Base"     "Pre"      "Instruct" "PrepTask" "Task"     "Post5"    "Post10"   "Post20"  
+ [9] "Post30"   "Post60"   "Post90"   "Post120"  "DBT"      "ST"       "SST"      "CP"      
+> ### Base (period 1)
+> ### pre (period 2)
+> ### Task (period 3-5)
+> ### post (period 6-12)
+
+```{r consolidate_periods}
+
+library(dplyr)
+library(forcats)
+
+# Helper function to extract numeric part of period
+extract_numeric <- function(x) {
+  as.numeric(gsub("[^0-9]", "", x))
+}
+
+# Update the code with custom ordering and creation of interval_longer
+comb_df_8 <- comb_df %>%
+  mutate(period = factor(period, levels = c("Base", "Pre", "Instruct", "PrepTask", "Task", 
+                  "Post5", "Post10", "Post20", "Post30", "Post60", "Post90", "Post120", 
+                  "DBT", "ST", "SST", "CP" ))) %>%
+  arrange(id, period) %>% 
+  mutate(period_longer = case_match(period,
+                                    "Base" ~ "Base",
+                                    "Pre" ~ "Pre",
+                                    c("Instruct", "PrepTask", "Task") ~ "Task",
+                                    c("Post5", "Post10", "Post20", "Post30", "Post60", "Post90", "Post120") ~ "Post",
+                                    .default = as.character(period))) %>%
+  mutate(interval = as.numeric(interval)) %>%  # Ensure interval is numeric
+  arrange(id, period_longer,
+          case_when(
+            period %in% c("Instruct", "PrepTask", "Task") ~ as.numeric(factor(period, levels = c("Instruct", "PrepTask", "Task"))),
+            TRUE ~ extract_numeric(as.character(period))
+          ),
+          interval) %>%
+  group_by(id, period_longer) %>%
+  mutate(interval_longer = row_number()) %>%
+  #mutate(interval_longer = as.integer(interval)) %>%
+  ungroup() %>% 
+  mutate(period_longer = factor(period_longer, levels = c("Base", "Pre", "Task", 
+                  "Post", "DBT", "ST", "SST", "CP")))
+
+# Display the resulting data frame
+head(comb_df_8)
+
+ggplot(comb_df_8 %>% filter(period_longer == "Post", id == "mi018"), aes(x = interval_longer, y = HR, group = id, color = period)) +
+  geom_line() +
+#  facet_wrap(~ period_longer) + 
+  ggtitle("Heart Rate")
+
+ggplot(comb_df_8, aes(x = interval_longer, y = RR, group = id, color = condition)) +
+  geom_line() +
+  facet_wrap(~ period_longer) + ggtitle("Respiration Rate")
+
+ggplot(comb_df, aes(x = interval, y = BP, group = id, color = condition)) +
+  geom_line() +
+  facet_wrap(~ period) + ggtitle("Blood Pressure")
 
 
+
+View(comb_df_8 %>% filter(id == "mi005", period_longer == "Post") %>% select(id, period, interval, period_longer, interval_longer))
+
+comb_df_8_orig <- comb_df_8
+comb_df_8 <- comb_df_8 %>% 
+  group_by(id, period) %>%
+  mutate(rate_diff = HR - lag(HR),
+         pval_diff = BP - lag(BP),
+         pval_rsp_diff = rsp_pVal - lag(rsp_pVal),
+         rate_rsp_diff = RR - lag(RR)) %>%
+  rename(rate_hr = HR, 
+    rate_hr_diff = rate_diff,
+         pval_bp = BP, 
+    pval_bp_diff = pval_diff,
+         pval_rsp = rsp_pVal, rate_rsp = RR) %>%
+  mutate(interval_orig = interval) %>% 
+  mutate(interval = as.integer(interval)) 
+
+```
+
+
+
+# Calculate TE
 
 ```{r te_for_1}
+
+
+# set comb_df, periods_str
 
 library(RTransferEntropy)
 library(future)
@@ -99,14 +189,23 @@ future::plan(multisession)
 te_df <- data.frame()
 skipped_te <- data.frame()
 
+id_old <- c("mi001", "mi002", "mi005", "mi006", "mi007", "mi008", "mi009", "mi010", "mi011", "mi012", "mi013", "mi015" ,"mi016","mi017","mi018", "mi019", "mi020", "mi021", "mi022", "mi023", "mi024", "mi025", "mi026","mi027", "mi028", "mi029","mi030", "mi036", "mi037", "mi040" ,"mi041", "mi043" ,"mi044", "mi045", "mi046", "mi048", "mi049", "mi050", "mi051","mi052" ,"mi053", "mi054", "mi055" ,"mi056", "mi057" ,"mi059", "mi060")
+
 # Loop through ids and periods (this takes a while!)
-for(id_str in ids %>% pull(id)) {
- for(period_str in periods_str){
+
+#for(id_str in ids %>% pull(id)) {
+for(id_str in id_old) {
+# for(period_str in periods_str){
+#for(period_str in unique(comb_df_8$period_longer)){
+
+for(period_str in c("Post", "SST", "ST")){
+
 # 
 # for(id_str in c("mi021", "mi053", "mi069", "mi100", "mi053", "mi037")) {
 #        for(period_str in c("Post60", "PrepTask", "Post5")){
          
-    cur = comb_df %>% filter(id == id_str, period == period_str)
+  #  cur = comb_df %>% filter(id == id_str, period == period_str)
+    cur = comb_df_8 %>% filter(id == id_str, period_longer == period_str) %>% mutate(period = period_longer)
     
     print(id_str)
     print(period_str)
@@ -124,14 +223,14 @@ for(id_str in ids %>% pull(id)) {
     tryCatch({
       
       # TE on differences
-      TE1hb_diff = transfer_entropy(cur$rate_hr_diff, cur$pval_bp_diff, type = 'quantiles', lx = 3, ly = 3, burn = 20)
-      TE2hr_diff = transfer_entropy(cur$rate_hr_diff, cur$rate_rsp_diff, type = 'quantiles', lx = 3, ly = 3, burn = 20)
-      TE3br_diff = transfer_entropy(cur$pval_bp_diff, cur$rate_rsp_diff, type = 'quantiles', lx = 3, ly = 3, burn = 20)
+      TE1hb_diff = transfer_entropy(cur$rate_hr_diff, cur$pval_bp_diff, type = 'quantiles', lx = 1, ly = 1)#, nboot = 0)#, burn = 20)
+      TE2hr_diff = transfer_entropy(cur$rate_hr_diff, cur$rate_rsp_diff, type = 'quantiles', lx = 1, ly = 1)#, nboot = 0)#, burn = 20)
+      TE3br_diff = transfer_entropy(cur$pval_bp_diff, cur$rate_rsp_diff, type = 'quantiles', lx = 1, ly = 1)#, nboot = 0)#, burn = 20)
       
       # TE on original time series
-      TE1hb = transfer_entropy(cur$rate_hr, cur$pval_bp, type = 'quantiles', lx = 3, ly = 3, burn = 20)
-      TE2hr = transfer_entropy(cur$rate_hr, cur$rate_rsp, type = 'quantiles', lx = 3, ly = 3, burn = 20)
-      TE3br = transfer_entropy(cur$pval_bp, cur$rate_rsp, type = 'quantiles', lx = 3, ly = 3, burn = 20)
+      TE1hb = transfer_entropy(cur$rate_hr, cur$pval_bp, type = 'quantiles', lx = 1, ly = 1)#, burn = 20)
+      TE2hr = transfer_entropy(cur$rate_hr, cur$rate_rsp, type = 'quantiles', lx = 1, ly = 1)#, burn = 20)
+      TE3br = transfer_entropy(cur$pval_bp, cur$rate_rsp, type = 'quantiles', lx = 1, ly = 1)#, burn = 20)
       
       te_row <- data.frame(
         id = id_str,
@@ -148,19 +247,19 @@ for(id_str in ids %>% pull(id)) {
         te_hr_rr = TE2hr$coef[1, 1],
         te_rr_hr = TE2hr$coef[2, 1],
         te_bp_rr = TE3br$coef[1, 1],
-        te_rr_bp = TE3br$coef[2, 1],
-        te_hr_bp_diff_p = TE1hb_diff$coef[1, 4],
-        te_bp_hr_diff_p = TE1hb_diff$coef[2, 4],
-        te_hr_rr_diff_p = TE2hr_diff$coef[1, 4],
-        te_rr_hr_diff_p = TE2hr_diff$coef[2, 4],
-        te_bp_rr_diff_p = TE3br_diff$coef[1, 4],
-        te_rr_bp_diff_p = TE3br_diff$coef[2, 4],
-        te_hr_bp_p = TE1hb$coef[1, 4],
-        te_bp_hr_p = TE1hb$coef[2, 4],
-        te_hr_rr_p = TE2hr$coef[1, 4],
-        te_rr_hr_p = TE2hr$coef[2, 4],
-        te_bp_rr_p = TE3br$coef[1, 4],
-        te_rr_bp_p = TE3br$coef[2, 4]
+        te_rr_bp = TE3br$coef[2, 1]#,
+        # te_hr_bp_diff_p = TE1hb_diff$coef[1, 4],
+        # te_bp_hr_diff_p = TE1hb_diff$coef[2, 4],
+        # te_hr_rr_diff_p = TE2hr_diff$coef[1, 4],
+        # te_rr_hr_diff_p = TE2hr_diff$coef[2, 4],
+        # te_bp_rr_diff_p = TE3br_diff$coef[1, 4],
+        # te_rr_bp_diff_p = TE3br_diff$coef[2, 4]#,
+        # te_hr_bp_p = TE1hb$coef[1, 4],
+        # te_bp_hr_p = TE1hb$coef[2, 4],
+        # te_hr_rr_p = TE2hr$coef[1, 4],
+        # te_rr_hr_p = TE2hr$coef[2, 4],
+        # te_bp_rr_p = TE3br$coef[1, 4],
+        # te_rr_bp_p = TE3br$coef[2, 4]
       )
       
       te_df <- rbind(te_df, te_row)
@@ -183,7 +282,7 @@ for(id_str in ids %>% pull(id)) {
 print(te_df)
 print(skipped_te)
 
-colnames(te_df) <- names(te_row)
+#colnames(te_df) <- names(te_row)
 
 # add condition back in 
 id_cond <- comb_df %>% 
@@ -199,6 +298,13 @@ plan(sequential)
 # write_csv(te_df, file = file.path("./data_processed", "te_df_notdetrended_20240524.csv"))
 # write_csv(skipped_te, file = file.path("./data_processed", "skipped_te_notdetrended_20240524.csv"))
 
+te_df_8 <- te_df
+#write_csv(te_df, file = file.path("./data_processed", "te_df_8_notdetrended_20240524.csv"))
+#write_csv(skipped_te, file = file.path("./data_processed", "skipped_te_8_notdetrended_20240524.csv"))
+
+te_df_l_1 <- te_df_8
+te_df_l_3 <- te_df
+
 ```
 
 Many were skipped, let's explore that. 
@@ -210,6 +316,10 @@ te_df %>%
   group_by(id) %>% 
   summarize(n_periods = n()) %>% 
   group_by(n_periods) %>% 
+  summarize(n = n())
+
+te_df %>% 
+  group_by(period) %>% 
   summarize(n = n())
 
 #   n_periods     n
@@ -234,6 +344,14 @@ te_df %>%
 
 # 34 ----> many,  many PrepTasks failed
 
+te_df %>% 
+  group_by(id, period) %>% 
+  summarize(n = n())
+  
+  
+te_df_0 <- read_csv(file.path("./data_processed", "te_df_notdetrended_20240524.csv"))
+
+
 ```
 
 # Comparing TE values (first pass)
@@ -250,7 +368,8 @@ library(broom)
 
 combined_summary <- te_df
 
-all_metric_names <- colnames(combined_summary %>% select("te_hr_bp_diff":"te_rr_bp"))
+all_metric_names <- colnames(combined_summary %>% select("te_hr_bp_diff":"te_rr_bp_diff"))
+#all_metric_names <- colnames(combined_summary %>% select("te_hr_bp_diff":"te_rr_bp"))
 
 # all_metric_names <- colnames(combined_summary %>% 
 #                                select(-"id", -"condition", -"period"))
@@ -290,12 +409,13 @@ results_list <- lapply(all_metric_names, function(metric) {
             Var1 = cond1,
             Var2 = cond2,
             period = unique(subset_data$period),
-            n_1 = length(data1),
-            n_2 = length(data2),
             mean_1 = t_test_result$estimate[1],
             mean_2 = t_test_result$estimate[2],
+            n_1 = length(data1),
+            n_2 = length(data2),
             t_test_p = t_test_result$p.value,
-            wilcoxon_test_p = wilcoxon_test_result$p.value
+            wilcoxon_test_p = wilcoxon_test_result$p.value,
+            sign_g1_v_g2 = if_else(sign(t_test_result$estimate[1] - t_test_result$estimate[2]) == 1, paste0(cond1, " higher than ", cond2), paste0(cond1, " lower than ", cond2))
           ))
         }
       }
@@ -323,18 +443,17 @@ results_list <- results_list %>%
   filter(!(Var1 == "Deletion" & Var2 == "Mutation")) %>% 
   rename(Group1 = Var1) %>% 
   rename(Group2 = Var2) %>% 
-  select(Group1, Group2, period, metric, t_test_p, wilcoxon_test_p, everything())
+  select(Group1, Group2, period, metric, sign_g1_v_g2, t_test_p, wilcoxon_test_p, everything())
 
 p_val_per_period <- results_list
 
 results_t_sig <- results_list %>% 
-  filter(t_test_p <= 0.05)
+  filter(t_test_p <= 0.15)
 
 results_wilcoxon_sig <- results_list %>% 
-  filter(wilcoxon_test_p <= 0.05)
+  filter(wilcoxon_test_p <= 0.15)
 
-
-  
+# write_csv(p_val_per_period, file = file.path("./data_processed", "p_val_per_period_8_notdetrended_108_20240603.csv"))
 
 ```
 
