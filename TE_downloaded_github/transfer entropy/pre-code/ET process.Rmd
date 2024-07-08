@@ -1,0 +1,277 @@
+---
+title: "transfer entropy process"
+output: html_document
+date: "2022-12-09"
+---
+## For loop process - single period
+
+### period 1
+```{r}
+period1_hr = hr_cleaned %>% filter(period == 1) %>% select(id, interval, rate_mean)
+period1_rsp = rsp_cleaned %>% filter(period == 1) %>% select(id, interval, rate_mean)
+period1_bp = bp_cleaned %>% filter(period == 1) %>% select(id, interval, pval_mean)
+
+## replace missing with the up value or down value, drop missing values
+period1 = left_join(period1_hr, period1_bp, by = c("id", "interval")) 
+period1 = left_join(period1, period1_rsp, by = c("id", "interval")) %>%
+  rename(rate_hr = rate_mean.x, rate_rsp = rate_mean.y) %>% 
+  fill(rate_hr, .direction = 'updown') %>% 
+  fill(rate_rsp, .direction = 'updown') %>% 
+  fill(pval_mean, .direction = 'updown') %>%
+  drop_na() %>% mutate(interval = as.numeric(interval))
+
+unique(period1$id)
+sum_p1 = period1 %>% group_by(id) %>% summarize(num_obs = n()) 
+# %>%
+  # mutate(pval_hr = NA, pval_rsp = NA, stationary_hr = NA, stationary_rsp = NA)
+    # number of observation for each patient
+```
+
+#### obtain transfer entropy
+
+* a: hr to rsp
+* b: rsp to hr
+* c: hr to bp
+* d: bp to hr
+* e: rsp to bp
+* f: bp to rsp
+
+```{r}
+trans_res = sum_p1 %>% select(id, num_obs) %>% mutate(a = NA, b = NA, c = NA, d = NA, e = NA, f = NA)
+trans_sig = sum_p1 %>% select(id, num_obs) %>% mutate(a = NA, b = NA, c = NA, d = NA, e = NA, f = NA)
+i = 1
+### using the residue
+for (i in 1:10) {
+  
+   cur_id = as.character(trans_res[i,1])
+   cur = period1 %>% filter(id == cur_id)
+   
+   fit_hr = loess(cur$rate_hr ~ cur$interval)
+   res_hr = fit_hr$residuals
+   fit_rsp = loess(cur$rate_rsp ~ cur$interval)
+   res_rsp = fit_rsp$residuals
+   fit_bp = loess(cur$pval_mean ~ cur$interval)
+   res_bp = fit_bp$residuals
+   
+   TE1 = transfer_entropy(res_hr, res_rsp)
+   trans_res$a[i] = TE1$coef[1, 1]
+   trans_res$b[i] = TE1$coef[2, 1]
+   trans_sig$a[i] = TE1$coef[1, 4]
+   trans_sig$b[i] = TE1$coef[2, 4]
+   
+   TE2 = transfer_entropy(res_hr, res_bp)
+   trans_res$c[i] = TE2$coef[1, 1]
+   trans_res$d[i] = TE2$coef[2, 1]
+   trans_sig$c[i] = TE2$coef[1, 4]
+   trans_sig$d[i] = TE2$coef[2, 4]
+   
+   TE3 = transfer_entropy(res_rsp, res_bp)
+   trans_res$e[i] = TE3$coef[1, 1]
+   trans_res$f[i] = TE3$coef[2, 1]
+   trans_sig$e[i] = TE3$coef[1, 4]
+   trans_sig$f[i] = TE3$coef[2, 4]
+
+}
+
+save(trans_res, file = "ET_p1.RData")
+save(trans_sig, file = "sig_p1.RData")
+```
+
+
+### period 2
+```{r}
+period2_hr = hr_cleaned %>% filter(period == 2) %>% select(id, interval, rate_mean)
+period2_rsp = rsp_cleaned %>% filter(period == 2) %>% select(id, interval, rate_mean)
+period2_bp = bp_cleaned %>% filter(period == 2) %>% select(id, interval, pval_mean)
+
+## replace missing with the up value or down value, drop missing values
+period2 = left_join(period2_hr, period2_bp, by = c("id", "interval")) 
+period2 = left_join(period2, period2_rsp, by = c("id", "interval")) %>%
+  rename(rate_hr = rate_mean.x, rate_rsp = rate_mean.y) %>% 
+  fill(rate_hr, .direction = 'updown') %>% 
+  fill(rate_rsp, .direction = 'updown') %>% 
+  fill(pval_mean, .direction = 'updown') %>%
+  drop_na() %>% mutate(interval = as.numeric(interval))
+
+unique(period2$id)
+sum_p2 = period2 %>% group_by(id) %>% summarize(num_obs = n()) 
+# %>%
+  # mutate(pval_hr = NA, pval_rsp = NA, stationary_hr = NA, stationary_rsp = NA)
+    # number of observation for each patient
+```
+
+#### obtain transfer entropy
+
+```{r}
+trans_res = sum_p2 %>% select(id, num_obs) %>% mutate(a = NA, b = NA, c = NA, d = NA, e = NA, f = NA)
+trans_sig = sum_p2 %>% select(id, num_obs) %>% mutate(a = NA, b = NA, c = NA, d = NA, e = NA, f = NA)
+
+### Do we really need to use to residues???!!!
+for (i in 1:nrow(trans_res)) {
+  
+   cur_id = as.character(trans_res[i,1])
+   cur = period2 %>% filter(id == cur_id)
+   
+   fit_hr = loess(cur$rate_hr ~ cur$interval)
+   res_hr = fit_hr$residuals
+   fit_rsp = loess(cur$rate_rsp ~ cur$interval)
+   res_rsp = fit_rsp$residuals
+   fit_bp = loess(cur$pval_mean ~ cur$interval)
+   res_bp = fit_bp$residuals
+   
+   TE1 = transfer_entropy(res_hr, res_rsp)
+   trans_res$a[i] = TE1$coef[1, 1]
+   trans_res$b[i] = TE1$coef[2, 1]
+   trans_sig$a[i] = TE1$coef[1, 4]
+   trans_sig$b[i] = TE1$coef[2, 4]
+   
+   TE2 = transfer_entropy(res_hr, res_bp)
+   trans_res$c[i] = TE2$coef[1, 1]
+   trans_res$d[i] = TE2$coef[2, 1]
+   trans_sig$c[i] = TE2$coef[1, 4]
+   trans_sig$d[i] = TE2$coef[2, 4]
+   
+   TE3 = transfer_entropy(res_rsp, res_bp)
+   trans_res$e[i] = TE3$coef[1, 1]
+   trans_res$f[i] = TE3$coef[2, 1]
+   trans_sig$e[i] = TE3$coef[1, 4]
+   trans_sig$f[i] = TE3$coef[2, 4]
+}
+
+save(trans_res, file = "ET_p2.RData")
+save(trans_sig, file = "sig_p2.RData")
+```
+
+
+### period 3,5,6
+```{r}
+period5_hr = hr_cleaned %>% filter(period == 5) %>% select(id, interval, rate_mean)
+period5_rsp = rsp_cleaned %>% filter(period == 5) %>% select(id, interval, rate_mean)
+period5_bp = bp_cleaned %>% filter(period == 5) %>% select(id, interval, pval_mean)
+
+## replace missing with the up value or down value, drop missing values
+period5 = left_join(period5_hr, period5_bp, by = c("id", "interval")) 
+period5 = left_join(period5, period5_rsp, by = c("id", "interval")) %>%
+  rename(rate_hr = rate_mean.x, rate_rsp = rate_mean.y) %>% 
+  fill(rate_hr, .direction = 'updown') %>% 
+  fill(rate_rsp, .direction = 'updown') %>% 
+  fill(pval_mean, .direction = 'updown') %>%
+  drop_na() %>% mutate(interval = as.numeric(interval))
+
+unique(period5$id)
+sum_p5 = period5 %>% group_by(id) %>% summarize(num_obs = n()) 
+# %>%
+  # mutate(pval_hr = NA, pval_rsp = NA, stationary_hr = NA, stationary_rsp = NA)
+    # number of observation for each patient
+
+trans_res = sum_p5 %>% select(id, num_obs) %>% mutate(a = NA, b = NA, c = NA, d = NA, e = NA, f = NA)
+trans_sig = sum_p5 %>% select(id, num_obs) %>% mutate(a = NA, b = NA, c = NA, d = NA, e = NA, f = NA)
+
+### Do we really need to use to residues???!!!
+for (i in 1:nrow(trans_res)) {
+  
+   cur_id = as.character(trans_res[i,1])
+   cur = period5 %>% filter(id == cur_id)
+   
+   fit_hr = loess(cur$rate_hr ~ cur$interval)
+   res_hr = fit_hr$residuals
+   fit_rsp = loess(cur$rate_rsp ~ cur$interval)
+   res_rsp = fit_rsp$residuals
+   fit_bp = loess(cur$pval_mean ~ cur$interval)
+   res_bp = fit_bp$residuals
+   
+   TE1 = transfer_entropy(res_hr, res_rsp)
+   trans_res$a[i] = TE1$coef[1, 1]
+   trans_res$b[i] = TE1$coef[2, 1]
+   trans_sig$a[i] = TE1$coef[1, 4]
+   trans_sig$b[i] = TE1$coef[2, 4]
+   
+   TE2 = transfer_entropy(res_hr, res_bp)
+   trans_res$c[i] = TE2$coef[1, 1]
+   trans_res$d[i] = TE2$coef[2, 1]
+   trans_sig$c[i] = TE2$coef[1, 4]
+   trans_sig$d[i] = TE2$coef[2, 4]
+   
+   TE3 = transfer_entropy(res_rsp, res_bp)
+   trans_res$e[i] = TE3$coef[1, 1]
+   trans_res$f[i] = TE3$coef[2, 1]
+   trans_sig$e[i] = TE3$coef[1, 4]
+   trans_sig$f[i] = TE3$coef[2, 4]
+}
+
+save(trans_res, file = "ET_p5.RData")
+save(trans_sig, file = "sig_p5.RData")
+```
+
+* errors for period 4, might be small number of observations??
+
+## data exploration for period 1,2,3,5,6
+
+```{r}
+load("ET_p1.RData"); te_p1 = trans_res
+load("sig_p1.RData"); sig_p1 = trans_sig
+load("ET_p2.RData"); te_p2 = trans_res
+load("sig_p2.RData"); sig_p2 = trans_sig
+load("ET_p3.RData"); te_p3 = trans_res
+load("sig_p3.RData"); sig_p3 = trans_sig
+load("ET_p5.RData"); te_p5 = trans_res
+load("sig_p5.RData"); sig_p5 = trans_sig
+load("ET_p6.RData"); te_p6 = trans_res
+load("sig_p6.RData"); sig_p6 = trans_sig
+
+sum(sig_p1$a < 0.05); sum(sig_p1$b < 0.05); sum(sig_p1$c < 0.05)
+sum(sig_p1$d < 0.05); sum(sig_p1$e < 0.05); sum(sig_p1$f < 0.05)
+
+sum(sig_p2$a < 0.05); sum(sig_p2$b < 0.05); sum(sig_p2$c < 0.05)
+sum(sig_p2$d < 0.05); sum(sig_p2$e < 0.05); sum(sig_p2$f < 0.05)
+
+sum(sig_p3$a < 0.05); sum(sig_p3$b < 0.05); sum(sig_p3$c < 0.05)
+sum(sig_p3$d < 0.05); sum(sig_p3$e < 0.05); sum(sig_p3$f < 0.05)
+
+sum(sig_p5$a < 0.05); sum(sig_p5$b < 0.05); sum(sig_p5$c < 0.05)
+sum(sig_p5$d < 0.05); sum(sig_p5$e < 0.05); sum(sig_p5$f < 0.05)
+
+sum(sig_p6$a < 0.05); sum(sig_p6$b < 0.05); sum(sig_p6$c < 0.05)
+sum(sig_p6$d < 0.05); sum(sig_p6$e < 0.05); sum(sig_p6$f < 0.05)
+
+
+p1 = trans_res %>% pivot_longer(a:f, names_to = "name", values_to = "te_value") %>%
+  ggplot(aes(x = name, y = te_value)) + 
+  geom_violin(aes(fill = name), color = "blue", alpha = .5) + 
+  theme(legend.position = "none") + xlab("period1")
+
+p2 = te_p2 %>% pivot_longer(a:f, names_to = "name", values_to = "te_value") %>%
+  ggplot(aes(x = name, y = te_value)) + 
+  geom_violin(aes(fill = name), color = "blue", alpha = .5) + 
+  theme(legend.position = "none") + xlab("period2")
+
+p3 = te_p3 %>% pivot_longer(a:f, names_to = "name", values_to = "te_value") %>%
+  ggplot(aes(x = name, y = te_value)) + 
+  geom_violin(aes(fill = name), color = "blue", alpha = .5) + 
+  theme(legend.position = "none") + xlab("period3")
+
+p5 = te_p5 %>% pivot_longer(a:f, names_to = "name", values_to = "te_value") %>%
+  ggplot(aes(x = name, y = te_value)) + 
+  geom_violin(aes(fill = name), color = "blue", alpha = .5) + 
+  theme(legend.position = "none") + xlab("period5")
+
+p6 = te_p6 %>% pivot_longer(a:f, names_to = "name", values_to = "te_value") %>%
+  ggplot(aes(x = name, y = te_value)) + 
+  geom_violin(aes(fill = name), color = "blue", alpha = .5) + 
+  theme(legend.position = "none") + xlab("period6")
+
+
+ggarrange(p1, p2, p3, p5, p6, ncol = 3, nrow = 2)
+
+
+cor(trans_res[1:49, 3:8])
+```
+
+
+
+
+
+
+
+
+

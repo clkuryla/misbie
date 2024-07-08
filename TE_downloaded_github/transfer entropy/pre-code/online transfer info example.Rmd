@@ -1,0 +1,141 @@
+---
+title: "online example"
+output: html_document
+date: "2022-10-19"
+---
+```{r, echo = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  fig.path = "man/figures/README-"
+)
+```
+
+# RTransferEntropy
+
+The goal of `RTransferEntropy` is to implement the calculation of the transfer entropy metric using Shannon's or the Renyi's methodology.
+
+A short introduction can be found below, for a more thorough introduction to the transfer entropy methodology and the `RTransferEntropy` package, see the [vignette](https://cran.r-project.org/package=RTransferEntropy/vignettes/transfer-entropy.html) and the [`RTransferEntropy` paper](https://www.sciencedirect.com/science/article/pii/S2352711019300779).
+If you use the package in academic work, please make sure to cite us, see also `citation("RTransferEntropy")`.
+
+The authors of the [`TransferEntropy`](https://CRAN.R-project.org/package=TransferEntropy) package no longer develop their package, which is deprecated as of 2018-08-10, and recommend the use of this package.
+
+## Example using simulated data
+
+Simulate a simple model to obtain two time series that are not independent (see simulation study in Dimpfl and Peter (2013)),
+i.e. one time series is lag of the other plus noise. In this case, one expects significant information flow from x to y 
+and none from y to x.
+
+### Simulating a Time-Series
+```{r}
+library(RTransferEntropy)
+library(future)
+# enable parallel processing
+plan(multisession)
+```
+
+```{r}
+set.seed(20180108)
+n <- 2000
+x <- rep(0, n + 1)
+y <- rep(0, n + 1)
+for (i in seq(n)) {
+  x[i + 1] <- 0.2 * x[i] + rnorm(1, 0, 2)
+  y[i + 1] <- x[i] + rnorm(1, 0, 2)
+}
+x <- x[-1]
+y <- y[-1]
+```
+
+
+### Visualisation
+```{r contemp_plot, message=FALSE, warning=FALSE}
+library(ggplot2)
+library(gridExtra)
+theme_set(theme_light())
+# Lagged X-Plot
+p1 <- ggplot(data.frame(x = c(NA, x[1:(length(x) - 1)]), y = y), aes(x, y)) +
+  geom_smooth() +
+  geom_point(alpha = 0.5, size = 0.5) +
+  labs(x = expression(X[t - 1]), y = expression(Y[t])) +
+  coord_fixed(1) +
+  scale_x_continuous(limits = range(x)) +
+  scale_y_continuous(limits = range(y))
+# X-Y Plot
+p2 <- ggplot(data.frame(x = x, y = y), aes(x, y)) +
+  geom_smooth() +
+  geom_point(alpha = 0.5, size = 0.5) +
+  labs(x = expression(X[t]), y = expression(Y[t])) +
+  coord_fixed(1) +
+  scale_x_continuous(limits = range(x)) +
+  scale_y_continuous(limits = range(y))
+# Lagged Y Plot
+p3 <- ggplot(data.frame(x = x, y = c(NA, y[1:(length(y) - 1)])), aes(x, y)) +
+  geom_smooth() +
+  geom_point(alpha = 0.5, size = 0.5) +
+  labs(x = expression(X[t]), y = expression(Y[t - 1])) +
+  coord_fixed(1) +
+  scale_x_continuous(limits = range(x)) +
+  scale_y_continuous(limits = range(y))
+a <- grid.arrange(p1, p2, p3, ncol = 3)
+
+
+```
+
+### Shannon Transfer Entropy
+```{r}
+set.seed(20180108)
+shannon_te <- transfer_entropy(x = x, y = y)
+shannon_te
+summary(shannon_te)
+```
+
+Alternatively, you can calculate only the transfer entropy or the effective transfer entropy with
+```{r}
+calc_te(x, y)
+calc_te(y, x)
+calc_ete(x, y)
+calc_ete(y, x)
+```
+
+
+### Renyi Transfer Entropy
+```{r}
+set.seed(20180108 + 1)
+renyi_te <- transfer_entropy(x = x, y = y, entropy = "renyi", q = 0.5)
+renyi_te
+calc_te(x, y, entropy = "renyi", q = 0.5)
+calc_te(y, x, entropy = "renyi", q = 0.5)
+calc_ete(x, y, entropy = "renyi", q = 0.5)
+calc_ete(y, x, entropy = "renyi", q = 0.5)
+```
+
+# Function Verbosity aka `quiet = TRUE`
+
+To disable the verbosity of a function you can use the argument `quiet`. Note that we have set `nboot = 0` as we don't need bootstrapped quantiles for this example.
+```{r}
+te <- transfer_entropy(x, y, nboot = 0, quiet = T)
+te
+```
+
+If you want to disable feedback from `transfer_entropy` functions, you can do so by using `set_quiet(TRUE)`
+```{r}
+set_quiet(TRUE)
+te <- transfer_entropy(x, y, nboot = 0)
+te
+# revert back with
+set_quiet(FALSE)
+te <- transfer_entropy(x, y, nboot = 0)
+```
+
+# Parallel Programming
+
+Using the `future` package and its `plan`s we can execute all computations in parallel like so
+```{r, warning=F}
+library(future)
+plan(multisession)
+te <- transfer_entropy(x, y, nboot = 100)
+# revert to sequential mode
+plan(sequential)
+te <- transfer_entropy(x, y, nboot = 100)
+```

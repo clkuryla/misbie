@@ -1,0 +1,270 @@
+---
+title: "Jan. 19 2023"
+output: html_document
+date: "2023-01-19"
+---
+```{r load library, include=FALSE}
+library(lmtest)
+library(tidyverse)
+library(stats)
+library(dplyr)
+library(purrr)
+library(timetk)
+library(pracma)
+library(ggplot2)
+library(ggfortify)
+library(egg)
+library(gridExtra)
+library(aTSA)
+library(autoReg)
+library(RTransferEntropy)
+options(warn=-1)
+library(tseries)
+```
+
+
+## blood pressure and heart rate only
+
+## period 1 and 5
+```{r}
+period1_hr = hr_cleaned %>% filter(period == "SST") %>% select(id, interval, rate_mean, diff)
+period1_bp = bp_cleaned %>% filter(period == "SST") %>% select(id, interval, pval_mean, diff)
+
+# period1 = left_join(period1_bp, period1_hr, by = c("id", "interval"))
+# p1_plot = period1 %>% 
+  # pivot_longer(pval_mean:rate_mean, names_to = "name", values_to = "value") %>%
+  # mutate(interval = as.integer(interval)) 
+
+period1_hr %>% filter(is.na(diff) == FALSE) %>%
+  ggplot(aes(x = as.integer(interval), y = rate_mean, group = id)) +  geom_smooth(method = "loess", formula = y ~ x, se = FALSE, size = 0.2) + coord_cartesian(ylim = c(60,150))
+
+period1_bp %>% filter(is.na(diff) == FALSE)  %>%
+  ggplot(aes(x = as.integer(interval), y = pval_mean, group = id)) + geom_smooth(method = "loess", formula = y ~ x, se = FALSE, size = 0.2) + coord_cartesian(ylim = c(80,200))
+
+period1_hr %>% filter(is.na(diff) == FALSE) %>%
+  ggplot(aes(x = as.integer(interval), y = diff, group = id)) + geom_smooth(method = "loess", formula = y ~ x, se = FALSE, size = 0.2) + coord_cartesian(ylim = c(-10,10))
+
+period1_bp %>% filter(is.na(diff) == FALSE) %>%
+  ggplot(aes(x = as.integer(interval), y = diff, group = id)) + geom_smooth(method = "loess", formula = y ~ x, se = FALSE, size = 0.2) + coord_cartesian(ylim = c(-10,10))
+
+```
+
+```{r}
+## replace missing with the up value or down value, drop missing values
+period1 = left_join(period1_hr, period1_bp, by = c("id", "interval"))  %>%
+  rename(rate_diff = diff.x, pval_diff = diff.y) %>% 
+  drop_na() %>% mutate(interval = as.numeric(interval)) 
+
+unique(period1$id)
+sum_p1 = period1 %>% group_by(id) %>% summarize(num_obs = n()) 
+# %>%
+  # mutate(pval_hr = NA, pval_rsp = NA, stationary_hr = NA, stationary_rsp = NA)
+    # number of observation for each patient
+
+sum(is.na(period1))
+```
+
+## obtain transfer entropy
+
+* c: hr to bp
+* d: bp to hr
+
+## using lag
+```{r}
+trans_res_sst_lag = sum_p1 %>% select(id, num_obs) %>% mutate(a = NA, b = NA, c = NA, d = NA, e = NA, f = NA)
+trans_sig_sst_lag = sum_p1 %>% select(id, num_obs) %>% mutate(a = NA, b = NA, c = NA, d = NA, e = NA, f = NA)
+i = 1
+
+### using the residue
+for (i in 1:nrow(trans_res_sst_lag)) {
+  
+   cur_id = as.character(trans_res_sst_lag[i,1])
+   cur = period1 %>% filter(id == cur_id)
+   
+   TE2 = transfer_entropy(cur$rate_diff, cur$pval_diff, lx = 3, ly = 3)
+
+   trans_res_sst_lag$c[i] = TE2$coef[1, 1]
+   trans_res_sst_lag$d[i] = TE2$coef[2, 1]
+   trans_sig_sst_lag$c[i] = TE2$coef[1, 4]
+   trans_sig_sst_lag$d[i] = TE2$coef[2, 4]
+
+}
+
+p1_lag = trans_res_1_lag %>% 
+  pivot_longer(a:f, names_to = "name", values_to = "te_value") %>%
+  filter(name == "c" | name == "d") %>%
+  ggplot(aes(x = name, y = te_value)) + 
+  geom_boxplot(aes(fill = name), color = "blue", alpha = .5) + 
+  theme(legend.position = "none") + xlab("period1")
+
+p5_lag = trans_res_5_lag %>% 
+  pivot_longer(a:f, names_to = "name", values_to = "te_value") %>%
+  filter(name == "c" | name == "d") %>%
+  ggplot(aes(x = name, y = te_value)) + 
+  geom_violin(aes(fill = name), color = "blue", alpha = .5) + 
+  theme(legend.position = "none") + xlab("period5")
+
+p6_lag = trans_res_6_lag %>% pivot_longer(a:f, names_to = "name", values_to = "te_value") %>%
+  filter(name == "c" | name == "d") %>%
+  ggplot(aes(x = name, y = te_value)) + 
+  geom_boxplot(aes(fill = name), color = "blue", alpha = .5) + 
+  theme(legend.position = "none") + xlab("period6")
+
+p_cp_lag = trans_res_cp_lag %>% pivot_longer(a:f, names_to = "name", values_to = "te_value") %>%
+  filter(name == "c" | name == "d") %>%
+  ggplot(aes(x = name, y = te_value)) + 
+  geom_boxplot(aes(fill = name), color = "blue", alpha = .5) + 
+  theme(legend.position = "none") + xlab("CP")
+
+p_sst_lag = trans_res_sst_lag %>% pivot_longer(a:f, names_to = "name", values_to = "te_value") %>%
+  filter(name == "c" | name == "d") %>%
+  ggplot(aes(x = name, y = te_value)) + 
+  geom_boxplot(aes(fill = name), color = "blue", alpha = .5) + 
+  theme(legend.position = "none") + xlab("SST")
+
+ggarrange(p1_lag, p5_lag, p6_lag, ncol = 3)
+ggarrange(p_cp_lag, p_sst_lag, nrow = 1)
+
+# period 1
+sum(trans_sig_1_lag$c <= 0.05) # 32/65
+sum(trans_sig_1_lag$d <= 0.05)  # 11/65
+
+# period 5
+sum(trans_sig_5_lag$c <= 0.05) # 8/61
+sum(trans_sig_5_lag$d < 0.05)  # 13/61
+
+# period 6
+sum(trans_sig_6_lag$c <= 0.05) # 32/61
+sum(trans_sig_6_lag$d <= 0.05)  # 19/61
+
+# CP
+sum(trans_sig_cp_lag$c <= 0.05) # 48/61
+sum(trans_sig_cp_lag$d <= 0.05)  # 35/61
+
+# SST
+sum(trans_sig_sst_lag$c <= 0.05) # 30/60
+sum(trans_sig_sst_lag$d <= 0.05)  # 33/60
+
+```
+
+
+## using loess smooth function
+```{r}
+trans_res_5_res = sum_p1 %>% select(id, num_obs) %>% mutate(a = NA, b = NA, c = NA, d = NA, e = NA, f = NA)
+trans_sig_5_res = sum_p1 %>% select(id, num_obs) %>% mutate(a = NA, b = NA, c = NA, d = NA, e = NA, f = NA)
+i = 1
+### using the residue
+for (i in 1:nrow(trans_res_5_res)) {
+  
+   cur_id = as.character(trans_res_5_res[i,1])
+   cur = period1 %>% filter(id == cur_id)
+   
+   fit_hr = loess(cur$rate_mean ~ cur$interval)
+   res_hr = fit_hr$residuals
+   fit_bp = loess(cur$pval_mean ~ cur$interval)
+   res_bp = fit_bp$residuals
+   
+   TE2 = transfer_entropy(res_hr, res_bp,  lx = 3, ly = 3)
+   trans_res_5_res$c[i] = TE2$coef[1, 1]
+   trans_res_5_res$d[i] = TE2$coef[2, 1]
+   trans_sig_5_res$c[i] = TE2$coef[1, 4]
+   trans_sig_5_res$d[i] = TE2$coef[2, 4]
+
+}
+
+p1_res = trans_res_1_res %>% 
+  pivot_longer(a:f, names_to = "name", values_to = "te_value") %>%
+  filter(name == "c" | name == "d") %>%
+  ggplot(aes(x = name, y = te_value)) + 
+  geom_violin(aes(fill = name), color = "blue", alpha = .5) + 
+  theme(legend.position = "none") + xlab("period1")
+
+p5_res = trans_res_5_res %>% pivot_longer(a:f, names_to = "name", values_to = "te_value") %>%
+  ggplot(aes(x = name, y = te_value)) + 
+  geom_violin(aes(fill = name), color = "blue", alpha = .5) + 
+  theme(legend.position = "none") + xlab("period5")
+
+ggarrange(p1_res, p5_res, ncol = 2)
+```
+
+
+## data exploration for period 1,2,3,5,6
+
+```{r}
+load("ET_p1.RData"); te_p1 = trans_res
+load("sig_p1.RData"); sig_p1 = trans_sig
+load("ET_p2.RData"); te_p2 = trans_res
+load("sig_p2.RData"); sig_p2 = trans_sig
+load("ET_p3.RData"); te_p3 = trans_res
+load("sig_p3.RData"); sig_p3 = trans_sig
+load("ET_p5.RData"); te_p5 = trans_res
+load("sig_p5.RData"); sig_p5 = trans_sig
+load("ET_p6.RData"); te_p6 = trans_res
+load("sig_p6.RData"); sig_p6 = trans_sig
+
+sum(sig_p1$a < 0.05); sum(sig_p1$b < 0.05); sum(sig_p1$c < 0.05)
+sum(sig_p1$d < 0.05); sum(sig_p1$e < 0.05); sum(sig_p1$f < 0.05)
+
+sum(sig_p2$a < 0.05); sum(sig_p2$b < 0.05); sum(sig_p2$c < 0.05)
+sum(sig_p2$d < 0.05); sum(sig_p2$e < 0.05); sum(sig_p2$f < 0.05)
+
+sum(sig_p3$a < 0.05); sum(sig_p3$b < 0.05); sum(sig_p3$c < 0.05)
+sum(sig_p3$d < 0.05); sum(sig_p3$e < 0.05); sum(sig_p3$f < 0.05)
+
+sum(sig_p5$a < 0.05); sum(sig_p5$b < 0.05); sum(sig_p5$c < 0.05)
+sum(sig_p5$d < 0.05); sum(sig_p5$e < 0.05); sum(sig_p5$f < 0.05)
+
+sum(sig_p6$a < 0.05); sum(sig_p6$b < 0.05); sum(sig_p6$c < 0.05)
+sum(sig_p6$d < 0.05); sum(sig_p6$e < 0.05); sum(sig_p6$f < 0.05)
+
+
+p1 = trans_res %>% pivot_longer(a:f, names_to = "name", values_to = "te_value") %>%
+  ggplot(aes(x = name, y = te_value)) + 
+  geom_violin(aes(fill = name), color = "blue", alpha = .5) + 
+  theme(legend.position = "none") + xlab("period1")
+
+p2 = te_p2 %>% pivot_longer(a:f, names_to = "name", values_to = "te_value") %>%
+  ggplot(aes(x = name, y = te_value)) + 
+  geom_violin(aes(fill = name), color = "blue", alpha = .5) + 
+  theme(legend.position = "none") + xlab("period2")
+
+p3 = te_p3 %>% pivot_longer(a:f, names_to = "name", values_to = "te_value") %>%
+  ggplot(aes(x = name, y = te_value)) + 
+  geom_violin(aes(fill = name), color = "blue", alpha = .5) + 
+  theme(legend.position = "none") + xlab("period3")
+
+p5 = te_p5 %>% pivot_longer(a:f, names_to = "name", values_to = "te_value") %>%
+  ggplot(aes(x = name, y = te_value)) + 
+  geom_violin(aes(fill = name), color = "blue", alpha = .5) + 
+  theme(legend.position = "none") + xlab("period5")
+
+p6 = te_p6 %>% pivot_longer(a:f, names_to = "name", values_to = "te_value") %>%
+  ggplot(aes(x = name, y = te_value)) + 
+  geom_violin(aes(fill = name), color = "blue", alpha = .5) + 
+  theme(legend.position = "none") + xlab("period6")
+
+
+ggarrange(p1, p2, p3, p5, p6, ncol = 3, nrow = 2)
+
+
+cor(trans_res[1:49, 3:8])
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

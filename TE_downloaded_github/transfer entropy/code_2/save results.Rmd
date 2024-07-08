@@ -1,0 +1,661 @@
+---
+title: "save results"
+output: html_document
+date: "2023-04-06"
+---
+
+Do this after "April 3 restart" and "TE exploration April 3"
+
+## CP, DBT, SST, ST
+```{r load dataset:  Post}
+## CP
+trans_res_cp_13 = trans_res_cp_lag_13 %>% 
+  select(-num_obs) %>% 
+  rename(a_Mutation = a, b_Mutation = b, c_Mutation = c, d_Mutation = d, e_Mutation = e, f_Mutation = f)
+
+trans_res_cp_2 = trans_res_cp_lag_2 %>% 
+  select(-num_obs) %>% 
+  rename(a_Deletion = a, b_Deletion = b, c_Deletion  = c, d_Deletion  = d, e_Deletion  = e, f_Deletion  = f)
+
+trans_res_cp_control = trans_res_cp_lag_control %>% 
+  select(-num_obs) %>% 
+  rename(a_Control = a, b_Control = b, c_Control  = c, d_Control  = d, e_Control  = e, f_Control = f)
+
+ overview_cp = full_join(trans_res_cp_13, trans_res_cp_2, by= "id")
+ overview_cp = full_join(overview_cp, trans_res_cp_control, by = "id")
+
+
+## DBT
+trans_res_dbt_13 = trans_res_dbt_lag_13 %>% 
+  select(-num_obs) %>% 
+  rename(a_Mutation = a, b_Mutation = b, c_Mutation = c, d_Mutation = d, e_Mutation = e, f_Mutation = f)
+
+trans_res_dbt_2 = trans_res_dbt_lag_2 %>% 
+  select(-num_obs) %>% 
+  rename(a_Deletion = a, b_Deletion = b, c_Deletion  = c, d_Deletion  = d, e_Deletion  = e, f_Deletion  = f)
+
+trans_res_dbt_control = trans_res_dbt_lag_control %>% 
+  select(-num_obs) %>% 
+  rename(a_Control = a, b_Control = b, c_Control  = c, d_Control  = d, e_Control  = e, f_Control = f)
+
+ overview_dbt = full_join(trans_res_dbt_13, trans_res_dbt_2, by= "id")
+ overview_dbt = full_join(overview_dbt, trans_res_dbt_control, by = "id")
+ 
+ 
+ ## SST
+ trans_res_sst_13 = trans_res_sst_lag_13 %>% 
+  select(-num_obs) %>% 
+  rename(a_Mutation = a, b_Mutation = b, c_Mutation = c, d_Mutation = d, e_Mutation = e, f_Mutation = f)
+
+trans_res_sst_2 = trans_res_sst_lag_2 %>% 
+  select(-num_obs) %>% 
+  rename(a_Deletion = a, b_Deletion = b, c_Deletion  = c, d_Deletion  = d, e_Deletion  = e, f_Deletion  = f)
+
+trans_res_sst_control = trans_res_sst_lag_control %>% 
+  select(-num_obs) %>% 
+  rename(a_Control = a, b_Control = b, c_Control  = c, d_Control  = d, e_Control  = e, f_Control = f)
+
+ overview_sst = full_join(trans_res_sst_13, trans_res_sst_2, by= "id")
+ overview_sst = full_join(overview_sst, trans_res_sst_control, by = "id")
+ 
+ 
+ ## ST
+trans_res_st_13 = trans_res_st_lag_13 %>% 
+  select(-num_obs) %>% 
+  rename(a_Mutation = a, b_Mutation = b, c_Mutation = c, d_Mutation = d, e_Mutation = e, f_Mutation = f)
+
+trans_res_st_2 = trans_res_st_lag_2 %>% 
+  select(-num_obs) %>% 
+  rename(a_Deletion = a, b_Deletion = b, c_Deletion  = c, d_Deletion  = d, e_Deletion  = e, f_Deletion  = f)
+
+trans_res_st_control = trans_res_st_lag_control %>% 
+  select(-num_obs) %>% 
+  rename(a_Control = a, b_Control = b, c_Control  = c, d_Control  = d, e_Control  = e, f_Control = f)
+
+ overview_st = full_join(trans_res_st_13, trans_res_st_2, by= "id")
+ overview_st = full_join(overview_st, trans_res_st_control, by = "id")
+```
+
+
+```{r load dataset:  Post}
+## CP
+trans_sig_cp_13 = trans_sig_cp_lag_13 %>% 
+  select(-num_obs) %>% 
+  rename(a_Mutation = a, b_Mutation = b, c_Mutation = c, d_Mutation = d, e_Mutation = e, f_Mutation = f)
+
+trans_sig_cp_2 = trans_sig_cp_lag_2 %>% 
+  select(-num_obs) %>% 
+  rename(a_Deletion = a, b_Deletion = b, c_Deletion  = c, d_Deletion  = d, e_Deletion  = e, f_Deletion  = f)
+
+trans_sig_cp_control = trans_sig_cp_lag_control %>% 
+  select(-num_obs) %>% 
+  rename(a_Control = a, b_Control = b, c_Control  = c, d_Control  = d, e_Control  = e, f_Control = f)
+
+ overview_cp_sig = full_join(trans_sig_cp_13, trans_sig_cp_2, by= "id")
+ overview_cp_sig = full_join(overview_cp_sig, trans_sig_cp_control, by = "id")
+
+
+## DBT
+trans_sig_dbt_13 = trans_sig_dbt_lag_13 %>% 
+  select(-num_obs) %>% 
+  rename(a_Mutation = a, b_Mutation = b, c_Mutation = c, d_Mutation = d, e_Mutation = e, f_Mutation = f)
+
+trans_sig_dbt_2 = trans_sig_dbt_lag_2 %>% 
+  select(-num_obs) %>% 
+  rename(a_Deletion = a, b_Deletion = b, c_Deletion  = c, d_Deletion  = d, e_Deletion  = e, f_Deletion  = f)
+
+trans_sig_dbt_control = trans_sig_dbt_lag_control %>% 
+  select(-num_obs) %>% 
+  rename(a_Control = a, b_Control = b, c_Control  = c, d_Control  = d, e_Control  = e, f_Control = f)
+
+ overview_dbt_sig = full_join(trans_sig_dbt_13, trans_sig_dbt_2, by= "id")
+ overview_dbt_sig = full_join(overview_dbt_sig, trans_sig_dbt_control, by = "id")
+ 
+ 
+ ## SST
+ trans_sig_sst_13 = trans_sig_sst_lag_13 %>% 
+  select(-num_obs) %>% 
+  rename(a_Mutation = a, b_Mutation = b, c_Mutation = c, d_Mutation = d, e_Mutation = e, f_Mutation = f)
+
+trans_sig_sst_2 = trans_sig_sst_lag_2 %>% 
+  select(-num_obs) %>% 
+  rename(a_Deletion = a, b_Deletion = b, c_Deletion  = c, d_Deletion  = d, e_Deletion  = e, f_Deletion  = f)
+
+trans_sig_sst_control = trans_sig_sst_lag_control %>% 
+  select(-num_obs) %>% 
+  rename(a_Control = a, b_Control = b, c_Control  = c, d_Control  = d, e_Control  = e, f_Control = f)
+
+ overview_sst_sig = full_join(trans_sig_sst_13, trans_sig_sst_2, by= "id")
+ overview_sst_sig = full_join(overview_sst_sig, trans_sig_sst_control, by = "id")
+ 
+ 
+ ## ST
+trans_sig_st_13 = trans_sig_st_lag_13 %>% 
+  select(-num_obs) %>% 
+  rename(a_Mutation = a, b_Mutation = b, c_Mutation = c, d_Mutation = d, e_Mutation = e, f_Mutation = f)
+
+trans_sig_st_2 = trans_sig_st_lag_2 %>% 
+  select(-num_obs) %>% 
+  rename(a_Deletion = a, b_Deletion = b, c_Deletion  = c, d_Deletion  = d, e_Deletion  = e, f_Deletion  = f)
+
+trans_sig_st_control = trans_sig_st_lag_control %>% 
+  select(-num_obs) %>% 
+  rename(a_Control = a, b_Control = b, c_Control  = c, d_Control  = d, e_Control  = e, f_Control = f)
+
+ overview_st_sig = full_join(trans_sig_st_13, trans_sig_st_2, by= "id")
+ overview_st_sig = full_join(overview_st_sig, trans_sig_st_control, by = "id")
+```
+
+```{r}
+save(overview_dbt, file = "original_dbt.RData")
+save(overview_cp, file = "original_cp.RData")
+save(overview_sst, file = "original_sst.RData")
+save(overview_st, file = "original_st.RData")
+
+save(overview_dbt_sig, file = "original_dbt_sig.RData")
+save(overview_cp_sig, file = "original_cp_sig.RData")
+save(overview_sst_sig, file = "original_sst_sig.RData")
+save(overview_st_sig, file = "original_st_sig.RData")
+```
+
+
+## period 1-12
+
+```{r}
+## p1
+trans_res_p1_13 = trans_res_p1_lag_13 %>% 
+  select(-num_obs) %>% 
+  rename(a_Mutation = a, b_Mutation = b, c_Mutation = c, d_Mutation = d, e_Mutation = e, f_Mutation = f)
+trans_res_p1_2 = trans_res_p1_lag_2 %>% 
+  select(-num_obs) %>% 
+  rename(a_Deletion = a, b_Deletion = b, c_Deletion  = c, d_Deletion  = d, e_Deletion  = e, f_Deletion  = f)
+trans_res_p1_control = trans_res_p1_lag_control %>% 
+  select(-num_obs) %>% 
+  rename(a_Control = a, b_Control = b, c_Control  = c, d_Control  = d, e_Control  = e, f_Control = f)
+overview_p1 = full_join(trans_res_p1_13, trans_res_p1_2, by= "id")
+overview_p1 = full_join(overview_p1, trans_res_p1_control, by = "id")
+ 
+## p2
+trans_res_p2_13 = trans_res_p2_lag_13 %>% 
+  select(-num_obs) %>% 
+  rename(a_Mutation = a, b_Mutation = b, c_Mutation = c, d_Mutation = d, e_Mutation = e, f_Mutation = f)
+trans_res_p2_2 = trans_res_p2_lag_2 %>% 
+  select(-num_obs) %>% 
+  rename(a_Deletion = a, b_Deletion = b, c_Deletion  = c, d_Deletion  = d, e_Deletion  = e, f_Deletion  = f)
+trans_res_p2_control = trans_res_p2_lag_control %>% 
+  select(-num_obs) %>% 
+  rename(a_Control = a, b_Control = b, c_Control  = c, d_Control  = d, e_Control  = e, f_Control = f)
+overview_p2 = full_join(trans_res_p2_13, trans_res_p2_2, by= "id")
+overview_p2 = full_join(overview_p2, trans_res_p2_control, by = "id")
+
+## p3
+trans_res_p3_13 = trans_res_p3_lag_13 %>% 
+  select(-num_obs) %>% 
+  rename(a_Mutation = a, b_Mutation = b, c_Mutation = c, d_Mutation = d, e_Mutation = e, f_Mutation = f)
+trans_res_p3_2 = trans_res_p3_lag_2 %>% 
+  select(-num_obs) %>% 
+  rename(a_Deletion = a, b_Deletion = b, c_Deletion  = c, d_Deletion  = d, e_Deletion  = e, f_Deletion  = f)
+trans_res_p3_control = trans_res_p3_lag_control %>% 
+  select(-num_obs) %>% 
+  rename(a_Control = a, b_Control = b, c_Control  = c, d_Control  = d, e_Control  = e, f_Control = f)
+overview_p3 = full_join(trans_res_p3_13, trans_res_p3_2, by= "id")
+overview_p3 = full_join(overview_p3, trans_res_p3_control, by = "id")
+
+## p4
+trans_res_p4_13 = trans_res_p4_lag_13 %>% 
+  select(-num_obs) %>% 
+  rename(a_Mutation = a, b_Mutation = b, c_Mutation = c, d_Mutation = d, e_Mutation = e, f_Mutation = f)
+trans_res_p4_2 = trans_res_p4_lag_2 %>% 
+  select(-num_obs) %>% 
+  rename(a_Deletion = a, b_Deletion = b, c_Deletion  = c, d_Deletion  = d, e_Deletion  = e, f_Deletion  = f)
+trans_res_p4_control = trans_res_p4_lag_control %>% 
+  select(-num_obs) %>% 
+  rename(a_Control = a, b_Control = b, c_Control  = c, d_Control  = d, e_Control  = e, f_Control = f)
+overview_p4 = full_join(trans_res_p4_13, trans_res_p4_2, by= "id")
+overview_p4 = full_join(overview_p4, trans_res_p4_control, by = "id")
+
+## p5
+trans_res_p5_13 = trans_res_p5_lag_13 %>% 
+  select(-num_obs) %>% 
+  rename(a_Mutation = a, b_Mutation = b, c_Mutation = c, d_Mutation = d, e_Mutation = e, f_Mutation = f)
+trans_res_p5_2 = trans_res_p5_lag_2 %>% 
+  select(-num_obs) %>% 
+  rename(a_Deletion = a, b_Deletion = b, c_Deletion  = c, d_Deletion  = d, e_Deletion  = e, f_Deletion  = f)
+trans_res_p5_control = trans_res_p5_lag_control %>% 
+  select(-num_obs) %>% 
+  rename(a_Control = a, b_Control = b, c_Control  = c, d_Control  = d, e_Control  = e, f_Control = f)
+overview_p5 = full_join(trans_res_p5_13, trans_res_p5_2, by= "id")
+overview_p5 = full_join(overview_p5, trans_res_p5_control, by = "id")
+
+## p6
+trans_res_p6_13 = trans_res_p6_lag_13 %>% 
+  select(-num_obs) %>% 
+  rename(a_Mutation = a, b_Mutation = b, c_Mutation = c, d_Mutation = d, e_Mutation = e, f_Mutation = f)
+trans_res_p6_2 = trans_res_p6_lag_2 %>% 
+  select(-num_obs) %>% 
+  rename(a_Deletion = a, b_Deletion = b, c_Deletion  = c, d_Deletion  = d, e_Deletion  = e, f_Deletion  = f)
+trans_res_p6_control = trans_res_p6_lag_control %>% 
+  select(-num_obs) %>% 
+  rename(a_Control = a, b_Control = b, c_Control  = c, d_Control  = d, e_Control  = e, f_Control = f)
+overview_p6 = full_join(trans_res_p6_13, trans_res_p6_2, by= "id")
+overview_p6 = full_join(overview_p6, trans_res_p6_control, by = "id")
+
+## p7
+trans_res_p7_13 = trans_res_p7_lag_13 %>% 
+  select(-num_obs) %>% 
+  rename(a_Mutation = a, b_Mutation = b, c_Mutation = c, d_Mutation = d, e_Mutation = e, f_Mutation = f)
+trans_res_p7_2 = trans_res_p7_lag_2 %>% 
+  select(-num_obs) %>% 
+  rename(a_Deletion = a, b_Deletion = b, c_Deletion  = c, d_Deletion  = d, e_Deletion  = e, f_Deletion  = f)
+trans_res_p7_control = trans_res_p7_lag_control %>% 
+  select(-num_obs) %>% 
+  rename(a_Control = a, b_Control = b, c_Control  = c, d_Control  = d, e_Control  = e, f_Control = f)
+overview_p7 = full_join(trans_res_p7_13, trans_res_p7_2, by= "id")
+overview_p7 = full_join(overview_p7, trans_res_p7_control, by = "id")
+
+## p8
+trans_res_p8_13 = trans_res_p8_lag_13 %>% 
+  select(-num_obs) %>% 
+  rename(a_Mutation = a, b_Mutation = b, c_Mutation = c, d_Mutation = d, e_Mutation = e, f_Mutation = f)
+trans_res_p8_2 = trans_res_p8_lag_2 %>% 
+  select(-num_obs) %>% 
+  rename(a_Deletion = a, b_Deletion = b, c_Deletion  = c, d_Deletion  = d, e_Deletion  = e, f_Deletion  = f)
+trans_res_p8_control = trans_res_p8_lag_control %>% 
+  select(-num_obs) %>% 
+  rename(a_Control = a, b_Control = b, c_Control  = c, d_Control  = d, e_Control  = e, f_Control = f)
+overview_p8 = full_join(trans_res_p8_13, trans_res_p8_2, by= "id")
+overview_p8 = full_join(overview_p8, trans_res_p8_control, by = "id")
+
+## p9
+trans_res_p9_13 = trans_res_p9_lag_13 %>% 
+  select(-num_obs) %>% 
+  rename(a_Mutation = a, b_Mutation = b, c_Mutation = c, d_Mutation = d, e_Mutation = e, f_Mutation = f)
+trans_res_p9_2 = trans_res_p9_lag_2 %>% 
+  select(-num_obs) %>% 
+  rename(a_Deletion = a, b_Deletion = b, c_Deletion  = c, d_Deletion  = d, e_Deletion  = e, f_Deletion  = f)
+trans_res_p9_control = trans_res_p9_lag_control %>% 
+  select(-num_obs) %>% 
+  rename(a_Control = a, b_Control = b, c_Control  = c, d_Control  = d, e_Control  = e, f_Control = f)
+overview_p9 = full_join(trans_res_p9_13, trans_res_p9_2, by= "id")
+overview_p9 = full_join(overview_p9, trans_res_p9_control, by = "id")
+
+## p10
+trans_res_p10_13 = trans_res_p10_lag_13 %>% 
+  select(-num_obs) %>% 
+  rename(a_Mutation = a, b_Mutation = b, c_Mutation = c, d_Mutation = d, e_Mutation = e, f_Mutation = f)
+trans_res_p10_2 = trans_res_p10_lag_2 %>% 
+  select(-num_obs) %>% 
+  rename(a_Deletion = a, b_Deletion = b, c_Deletion  = c, d_Deletion  = d, e_Deletion  = e, f_Deletion  = f)
+trans_res_p10_control = trans_res_p10_lag_control %>% 
+  select(-num_obs) %>% 
+  rename(a_Control = a, b_Control = b, c_Control  = c, d_Control  = d, e_Control  = e, f_Control = f)
+overview_p10 = full_join(trans_res_p10_13, trans_res_p10_2, by= "id")
+overview_p10 = full_join(overview_p10, trans_res_p10_control, by = "id")
+
+## p11
+trans_res_p11_13 = trans_res_p11_lag_13 %>% 
+  select(-num_obs) %>% 
+  rename(a_Mutation = a, b_Mutation = b, c_Mutation = c, d_Mutation = d, e_Mutation = e, f_Mutation = f)
+trans_res_p11_2 = trans_res_p11_lag_2 %>% 
+  select(-num_obs) %>% 
+  rename(a_Deletion = a, b_Deletion = b, c_Deletion  = c, d_Deletion  = d, e_Deletion  = e, f_Deletion  = f)
+trans_res_p11_control = trans_res_p11_lag_control %>% 
+  select(-num_obs) %>% 
+  rename(a_Control = a, b_Control = b, c_Control  = c, d_Control  = d, e_Control  = e, f_Control = f)
+overview_p11 = full_join(trans_res_p11_13, trans_res_p11_2, by= "id")
+overview_p11 = full_join(overview_p11, trans_res_p11_control, by = "id")
+
+## p12
+trans_res_p12_13 = trans_res_p12_lag_13 %>% 
+  select(-num_obs) %>% 
+  rename(a_Mutation = a, b_Mutation = b, c_Mutation = c, d_Mutation = d, e_Mutation = e, f_Mutation = f)
+trans_res_p12_2 = trans_res_p12_lag_2 %>% 
+  select(-num_obs) %>% 
+  rename(a_Deletion = a, b_Deletion = b, c_Deletion  = c, d_Deletion  = d, e_Deletion  = e, f_Deletion  = f)
+trans_res_p12_control = trans_res_p12_lag_control %>% 
+  select(-num_obs) %>% 
+  rename(a_Control = a, b_Control = b, c_Control  = c, d_Control  = d, e_Control  = e, f_Control = f)
+overview_p12 = full_join(trans_res_p12_13, trans_res_p12_2, by= "id")
+overview_p12 = full_join(overview_p12, trans_res_p12_control, by = "id")
+
+```
+
+
+```{r}
+## p1
+trans_sig_p1_13 = trans_sig_p1_lag_13 %>% 
+  select(-num_obs) %>% 
+  rename(a_Mutation = a, b_Mutation = b, c_Mutation = c, d_Mutation = d, e_Mutation = e, f_Mutation = f)
+trans_sig_p1_2 = trans_sig_p1_lag_2 %>% 
+  select(-num_obs) %>% 
+  rename(a_Deletion = a, b_Deletion = b, c_Deletion  = c, d_Deletion  = d, e_Deletion  = e, f_Deletion  = f)
+trans_sig_p1_control = trans_sig_p1_lag_control %>% 
+  select(-num_obs) %>% 
+  rename(a_Control = a, b_Control = b, c_Control  = c, d_Control  = d, e_Control  = e, f_Control = f)
+overview_p1_sig = full_join(trans_sig_p1_13, trans_sig_p1_2, by= "id")
+overview_p1_sig = full_join(overview_p1_sig, trans_sig_p1_control, by = "id")
+ 
+## p2
+trans_sig_p2_13 = trans_sig_p2_lag_13 %>% 
+  select(-num_obs) %>% 
+  rename(a_Mutation = a, b_Mutation = b, c_Mutation = c, d_Mutation = d, e_Mutation = e, f_Mutation = f)
+trans_sig_p2_2 = trans_sig_p2_lag_2 %>% 
+  select(-num_obs) %>% 
+  rename(a_Deletion = a, b_Deletion = b, c_Deletion  = c, d_Deletion  = d, e_Deletion  = e, f_Deletion  = f)
+trans_sig_p2_control = trans_sig_p2_lag_control %>% 
+  select(-num_obs) %>% 
+  rename(a_Control = a, b_Control = b, c_Control  = c, d_Control  = d, e_Control  = e, f_Control = f)
+overview_p2_sig = full_join(trans_sig_p2_13, trans_sig_p2_2, by= "id")
+overview_p2_sig = full_join(overview_p2_sig, trans_sig_p2_control, by = "id")
+
+## p3
+trans_sig_p3_13 = trans_sig_p3_lag_13 %>% 
+  select(-num_obs) %>% 
+  rename(a_Mutation = a, b_Mutation = b, c_Mutation = c, d_Mutation = d, e_Mutation = e, f_Mutation = f)
+trans_sig_p3_2 = trans_sig_p3_lag_2 %>% 
+  select(-num_obs) %>% 
+  rename(a_Deletion = a, b_Deletion = b, c_Deletion  = c, d_Deletion  = d, e_Deletion  = e, f_Deletion  = f)
+trans_sig_p3_control = trans_sig_p3_lag_control %>% 
+  select(-num_obs) %>% 
+  rename(a_Control = a, b_Control = b, c_Control  = c, d_Control  = d, e_Control  = e, f_Control = f)
+overview_p3_sig = full_join(trans_sig_p3_13, trans_sig_p3_2, by= "id")
+overview_p3_sig = full_join(overview_p3_sig, trans_sig_p3_control, by = "id")
+
+## p4
+trans_sig_p4_13 = trans_sig_p4_lag_13 %>% 
+  select(-num_obs) %>% 
+  rename(a_Mutation = a, b_Mutation = b, c_Mutation = c, d_Mutation = d, e_Mutation = e, f_Mutation = f)
+trans_sig_p4_2 = trans_sig_p4_lag_2 %>% 
+  select(-num_obs) %>% 
+  rename(a_Deletion = a, b_Deletion = b, c_Deletion  = c, d_Deletion  = d, e_Deletion  = e, f_Deletion  = f)
+trans_sig_p4_control = trans_sig_p4_lag_control %>% 
+  select(-num_obs) %>% 
+  rename(a_Control = a, b_Control = b, c_Control  = c, d_Control  = d, e_Control  = e, f_Control = f)
+overview_p4_sig = full_join(trans_sig_p4_13, trans_sig_p4_2, by= "id")
+overview_p4_sig = full_join(overview_p4_sig, trans_sig_p4_control, by = "id")
+
+## p5
+trans_sig_p5_13 = trans_sig_p5_lag_13 %>% 
+  select(-num_obs) %>% 
+  rename(a_Mutation = a, b_Mutation = b, c_Mutation = c, d_Mutation = d, e_Mutation = e, f_Mutation = f)
+trans_sig_p5_2 = trans_sig_p5_lag_2 %>% 
+  select(-num_obs) %>% 
+  rename(a_Deletion = a, b_Deletion = b, c_Deletion  = c, d_Deletion  = d, e_Deletion  = e, f_Deletion  = f)
+trans_sig_p5_control = trans_sig_p5_lag_control %>% 
+  select(-num_obs) %>% 
+  rename(a_Control = a, b_Control = b, c_Control  = c, d_Control  = d, e_Control  = e, f_Control = f)
+overview_p5_sig = full_join(trans_sig_p5_13, trans_sig_p5_2, by= "id")
+overview_p5_sig = full_join(overview_p5_sig, trans_sig_p5_control, by = "id")
+
+## p6
+trans_sig_p6_13 = trans_sig_p6_lag_13 %>% 
+  select(-num_obs) %>% 
+  rename(a_Mutation = a, b_Mutation = b, c_Mutation = c, d_Mutation = d, e_Mutation = e, f_Mutation = f)
+trans_sig_p6_2 = trans_sig_p6_lag_2 %>% 
+  select(-num_obs) %>% 
+  rename(a_Deletion = a, b_Deletion = b, c_Deletion  = c, d_Deletion  = d, e_Deletion  = e, f_Deletion  = f)
+trans_sig_p6_control = trans_sig_p6_lag_control %>% 
+  select(-num_obs) %>% 
+  rename(a_Control = a, b_Control = b, c_Control  = c, d_Control  = d, e_Control  = e, f_Control = f)
+overview_p6_sig = full_join(trans_sig_p6_13, trans_sig_p6_2, by= "id")
+overview_p6_sig = full_join(overview_p6_sig, trans_sig_p6_control, by = "id")
+
+## p7
+trans_sig_p7_13 = trans_sig_p7_lag_13 %>% 
+  select(-num_obs) %>% 
+  rename(a_Mutation = a, b_Mutation = b, c_Mutation = c, d_Mutation = d, e_Mutation = e, f_Mutation = f)
+trans_sig_p7_2 = trans_sig_p7_lag_2 %>% 
+  select(-num_obs) %>% 
+  rename(a_Deletion = a, b_Deletion = b, c_Deletion  = c, d_Deletion  = d, e_Deletion  = e, f_Deletion  = f)
+trans_sig_p7_control = trans_sig_p7_lag_control %>% 
+  select(-num_obs) %>% 
+  rename(a_Control = a, b_Control = b, c_Control  = c, d_Control  = d, e_Control  = e, f_Control = f)
+overview_p7_sig = full_join(trans_sig_p7_13, trans_sig_p7_2, by= "id")
+overview_p7_sig = full_join(overview_p7_sig, trans_sig_p7_control, by = "id")
+
+## p8
+trans_sig_p8_13 = trans_sig_p8_lag_13 %>% 
+  select(-num_obs) %>% 
+  rename(a_Mutation = a, b_Mutation = b, c_Mutation = c, d_Mutation = d, e_Mutation = e, f_Mutation = f)
+trans_sig_p8_2 = trans_sig_p8_lag_2 %>% 
+  select(-num_obs) %>% 
+  rename(a_Deletion = a, b_Deletion = b, c_Deletion  = c, d_Deletion  = d, e_Deletion  = e, f_Deletion  = f)
+trans_sig_p8_control = trans_sig_p8_lag_control %>% 
+  select(-num_obs) %>% 
+  rename(a_Control = a, b_Control = b, c_Control  = c, d_Control  = d, e_Control  = e, f_Control = f)
+overview_p8_sig = full_join(trans_sig_p8_13, trans_sig_p8_2, by= "id")
+overview_p8_sig = full_join(overview_p8_sig, trans_sig_p8_control, by = "id")
+
+## p9
+trans_sig_p9_13 = trans_sig_p9_lag_13 %>% 
+  select(-num_obs) %>% 
+  rename(a_Mutation = a, b_Mutation = b, c_Mutation = c, d_Mutation = d, e_Mutation = e, f_Mutation = f)
+trans_sig_p9_2 = trans_sig_p9_lag_2 %>% 
+  select(-num_obs) %>% 
+  rename(a_Deletion = a, b_Deletion = b, c_Deletion  = c, d_Deletion  = d, e_Deletion  = e, f_Deletion  = f)
+trans_sig_p9_control = trans_sig_p9_lag_control %>% 
+  select(-num_obs) %>% 
+  rename(a_Control = a, b_Control = b, c_Control  = c, d_Control  = d, e_Control  = e, f_Control = f)
+overview_p9_sig = full_join(trans_sig_p9_13, trans_sig_p9_2, by= "id")
+overview_p9_sig = full_join(overview_p9_sig, trans_sig_p9_control, by = "id")
+
+## p10
+trans_sig_p10_13 = trans_sig_p10_lag_13 %>% 
+  select(-num_obs) %>% 
+  rename(a_Mutation = a, b_Mutation = b, c_Mutation = c, d_Mutation = d, e_Mutation = e, f_Mutation = f)
+trans_sig_p10_2 = trans_sig_p10_lag_2 %>% 
+  select(-num_obs) %>% 
+  rename(a_Deletion = a, b_Deletion = b, c_Deletion  = c, d_Deletion  = d, e_Deletion  = e, f_Deletion  = f)
+trans_sig_p10_control = trans_sig_p10_lag_control %>% 
+  select(-num_obs) %>% 
+  rename(a_Control = a, b_Control = b, c_Control  = c, d_Control  = d, e_Control  = e, f_Control = f)
+overview_p10_sig = full_join(trans_sig_p10_13, trans_sig_p10_2, by= "id")
+overview_p10_sig = full_join(overview_p10_sig, trans_sig_p10_control, by = "id")
+
+## p11
+trans_sig_p11_13 = trans_sig_p11_lag_13 %>% 
+  select(-num_obs) %>% 
+  rename(a_Mutation = a, b_Mutation = b, c_Mutation = c, d_Mutation = d, e_Mutation = e, f_Mutation = f)
+trans_sig_p11_2 = trans_sig_p11_lag_2 %>% 
+  select(-num_obs) %>% 
+  rename(a_Deletion = a, b_Deletion = b, c_Deletion  = c, d_Deletion  = d, e_Deletion  = e, f_Deletion  = f)
+trans_sig_p11_control = trans_sig_p11_lag_control %>% 
+  select(-num_obs) %>% 
+  rename(a_Control = a, b_Control = b, c_Control  = c, d_Control  = d, e_Control  = e, f_Control = f)
+overview_p11_sig = full_join(trans_sig_p11_13, trans_sig_p11_2, by= "id")
+overview_p11_sig = full_join(overview_p11_sig, trans_sig_p11_control, by = "id")
+
+## p12
+trans_sig_p12_13 = trans_sig_p12_lag_13 %>% 
+  select(-num_obs) %>% 
+  rename(a_Mutation = a, b_Mutation = b, c_Mutation = c, d_Mutation = d, e_Mutation = e, f_Mutation = f)
+trans_sig_p12_2 = trans_sig_p12_lag_2 %>% 
+  select(-num_obs) %>% 
+  rename(a_Deletion = a, b_Deletion = b, c_Deletion  = c, d_Deletion  = d, e_Deletion  = e, f_Deletion  = f)
+trans_sig_p12_control = trans_sig_p12_lag_control %>% 
+  select(-num_obs) %>% 
+  rename(a_Control = a, b_Control = b, c_Control  = c, d_Control  = d, e_Control  = e, f_Control = f)
+overview_p12_sig = full_join(trans_sig_p12_13, trans_sig_p12_2, by= "id")
+overview_p12_sig = full_join(overview_p12_sig, trans_sig_p12_control, by = "id")
+
+```
+
+
+```{r}
+save(overview_p1, file = "original_p1.RData"); save(overview_p2, file = "original_p2.RData")
+save(overview_p3, file = "original_p3.RData"); save(overview_p4, file = "original_p4.RData")
+save(overview_p5, file = "original_p5.RData"); save(overview_p6, file = "original_p6.RData")
+save(overview_p7, file = "original_p7.RData"); save(overview_p8, file = "original_p8.RData")
+save(overview_p9, file = "original_p9.RData"); save(overview_p10, file = "original_p10.RData")
+save(overview_p11, file = "original_p11.RData"); save(overview_p12, file = "original_p12.RData")
+
+save(overview_p1_sig, file = "original_p1_sig.RData"); save(overview_p2_sig, file = "original_p2_sig.RData")
+save(overview_p3_sig, file = "original_p3_sig.RData"); save(overview_p4_sig, file = "original_p4_sig.RData")
+save(overview_p5_sig, file = "original_p5_sig.RData"); save(overview_p6_sig, file = "original_p6_sig.RData")
+save(overview_p7_sig, file = "original_p7_sig.RData"); save(overview_p8_sig, file = "original_p8_sig.RData")
+save(overview_p9_sig, file = "original_p9_sig.RData"); save(overview_p10_sig, file = "original_p10_sig.RData")
+save(overview_p11_sig, file = "original_p11_sig.RData"); save(overview_p12_sig, file = "original_p12_sig.RData")
+
+```
+
+
+## base, pre, task, post
+
+```{r load dataset:  Post}
+## base
+trans_res_base_13 = trans_res_base_lag_13 %>% 
+  select(-num_obs) %>% 
+  rename(a_Mutation = a, b_Mutation = b, c_Mutation = c, d_Mutation = d, e_Mutation = e, f_Mutation = f)
+
+trans_res_base_2 = trans_res_base_lag_2 %>% 
+  select(-num_obs) %>% 
+  rename(a_Deletion = a, b_Deletion = b, c_Deletion  = c, d_Deletion  = d, e_Deletion  = e, f_Deletion  = f)
+
+trans_res_base_control = trans_res_base_lag_control %>% 
+  select(-num_obs) %>% 
+  rename(a_Control = a, b_Control = b, c_Control  = c, d_Control  = d, e_Control  = e, f_Control = f)
+
+ overview_base = full_join(trans_res_base_13, trans_res_base_2, by= "id")
+ overview_base = full_join(overview_base, trans_res_base_control, by = "id")
+
+
+## pre
+trans_res_pre_13 = trans_res_pre_lag_13 %>% 
+  select(-num_obs) %>% 
+  rename(a_Mutation = a, b_Mutation = b, c_Mutation = c, d_Mutation = d, e_Mutation = e, f_Mutation = f)
+
+trans_res_pre_2 = trans_res_pre_lag_2 %>% 
+  select(-num_obs) %>% 
+  rename(a_Deletion = a, b_Deletion = b, c_Deletion  = c, d_Deletion  = d, e_Deletion  = e, f_Deletion  = f)
+
+trans_res_pre_control = trans_res_pre_lag_control %>% 
+  select(-num_obs) %>% 
+  rename(a_Control = a, b_Control = b, c_Control  = c, d_Control  = d, e_Control  = e, f_Control = f)
+
+ overview_pre = full_join(trans_res_pre_13, trans_res_pre_2, by= "id")
+ overview_pre = full_join(overview_pre, trans_res_pre_control, by = "id")
+ 
+ 
+ ## task
+ trans_res_task_13 = trans_res_task_lag_13 %>% 
+  select(-num_obs) %>% 
+  rename(a_Mutation = a, b_Mutation = b, c_Mutation = c, d_Mutation = d, e_Mutation = e, f_Mutation = f)
+
+trans_res_task_2 = trans_res_task_lag_2 %>% 
+  select(-num_obs) %>% 
+  rename(a_Deletion = a, b_Deletion = b, c_Deletion  = c, d_Deletion  = d, e_Deletion  = e, f_Deletion  = f)
+
+trans_res_task_control = trans_res_task_lag_control %>% 
+  select(-num_obs) %>% 
+  rename(a_Control = a, b_Control = b, c_Control  = c, d_Control  = d, e_Control  = e, f_Control = f)
+
+ overview_task = full_join(trans_res_task_13, trans_res_task_2, by= "id")
+ overview_task = full_join(overview_task, trans_res_task_control, by = "id")
+ 
+ 
+ ## post
+trans_res_post_13 = trans_res_post_lag_13 %>% 
+  select(-num_obs) %>% 
+  rename(a_Mutation = a, b_Mutation = b, c_Mutation = c, d_Mutation = d, e_Mutation = e, f_Mutation = f)
+
+trans_res_post_2 = trans_res_post_lag_2 %>% 
+  select(-num_obs) %>% 
+  rename(a_Deletion = a, b_Deletion = b, c_Deletion  = c, d_Deletion  = d, e_Deletion  = e, f_Deletion  = f)
+
+trans_res_post_control = trans_res_post_lag_control %>% 
+  select(-num_obs) %>% 
+  rename(a_Control = a, b_Control = b, c_Control  = c, d_Control  = d, e_Control  = e, f_Control = f)
+
+ overview_post = full_join(trans_res_post_13, trans_res_post_2, by= "id")
+ overview_post = full_join(overview_post, trans_res_post_control, by = "id")
+```
+
+
+```{r load dataset:  Popost}
+## base
+trans_sig_base_13 = trans_sig_base_lag_13 %>% 
+  select(-num_obs) %>% 
+  rename(a_Mutation = a, b_Mutation = b, c_Mutation = c, d_Mutation = d, e_Mutation = e, f_Mutation = f)
+
+trans_sig_base_2 = trans_sig_base_lag_2 %>% 
+  select(-num_obs) %>% 
+  rename(a_Deletion = a, b_Deletion = b, c_Deletion  = c, d_Deletion  = d, e_Deletion  = e, f_Deletion  = f)
+
+trans_sig_base_control = trans_sig_base_lag_control %>% 
+  select(-num_obs) %>% 
+  rename(a_Control = a, b_Control = b, c_Control  = c, d_Control  = d, e_Control  = e, f_Control = f)
+
+ overview_base_sig = full_join(trans_sig_base_13, trans_sig_base_2, by= "id")
+ overview_base_sig = full_join(overview_base_sig, trans_sig_base_control, by = "id")
+
+
+## pre
+trans_sig_pre_13 = trans_sig_pre_lag_13 %>% 
+  select(-num_obs) %>% 
+  rename(a_Mutation = a, b_Mutation = b, c_Mutation = c, d_Mutation = d, e_Mutation = e, f_Mutation = f)
+
+trans_sig_pre_2 = trans_sig_pre_lag_2 %>% 
+  select(-num_obs) %>% 
+  rename(a_Deletion = a, b_Deletion = b, c_Deletion  = c, d_Deletion  = d, e_Deletion  = e, f_Deletion  = f)
+
+trans_sig_pre_control = trans_sig_pre_lag_control %>% 
+  select(-num_obs) %>% 
+  rename(a_Control = a, b_Control = b, c_Control  = c, d_Control  = d, e_Control  = e, f_Control = f)
+
+ overview_pre_sig = full_join(trans_sig_pre_13, trans_sig_pre_2, by= "id")
+ overview_pre_sig = full_join(overview_pre_sig, trans_sig_pre_control, by = "id")
+ 
+ 
+ ## task
+ trans_sig_task_13 = trans_sig_task_lag_13 %>% 
+  select(-num_obs) %>% 
+  rename(a_Mutation = a, b_Mutation = b, c_Mutation = c, d_Mutation = d, e_Mutation = e, f_Mutation = f)
+
+trans_sig_task_2 = trans_sig_task_lag_2 %>% 
+  select(-num_obs) %>% 
+  rename(a_Deletion = a, b_Deletion = b, c_Deletion  = c, d_Deletion  = d, e_Deletion  = e, f_Deletion  = f)
+
+trans_sig_task_control = trans_sig_task_lag_control %>% 
+  select(-num_obs) %>% 
+  rename(a_Control = a, b_Control = b, c_Control  = c, d_Control  = d, e_Control  = e, f_Control = f)
+
+ overview_task_sig = full_join(trans_sig_task_13, trans_sig_task_2, by= "id")
+ overview_task_sig = full_join(overview_task_sig, trans_sig_task_control, by = "id")
+ 
+ 
+ ## post
+trans_sig_post_13 = trans_sig_post_lag_13 %>% 
+  select(-num_obs) %>% 
+  rename(a_Mutation = a, b_Mutation = b, c_Mutation = c, d_Mutation = d, e_Mutation = e, f_Mutation = f)
+
+trans_sig_post_2 = trans_sig_post_lag_2 %>% 
+  select(-num_obs) %>% 
+  rename(a_Deletion = a, b_Deletion = b, c_Deletion  = c, d_Deletion  = d, e_Deletion  = e, f_Deletion  = f)
+
+trans_sig_post_control = trans_sig_post_lag_control %>% 
+  select(-num_obs) %>% 
+  rename(a_Control = a, b_Control = b, c_Control  = c, d_Control  = d, e_Control  = e, f_Control = f)
+
+ overview_post_sig = full_join(trans_sig_post_13, trans_sig_post_2, by= "id")
+ overview_post_sig = full_join(overview_post_sig, trans_sig_post_control, by = "id")
+```
+
+```{r}
+save(overview_pre, file = "original_pre.RData")
+save(overview_base, file = "original_base.RData")
+save(overview_task, file = "original_task.RData")
+save(overview_post, file = "original_post.RData")
+
+save(overview_pre_sig, file = "original_pre_sig.RData")
+save(overview_base_sig, file = "original_base_sig.RData")
+save(overview_task_sig, file = "original_task_sig.RData")
+save(overview_post_sig, file = "original_post_sig.RData")
+```
+
+
+
+
+
+
+
+

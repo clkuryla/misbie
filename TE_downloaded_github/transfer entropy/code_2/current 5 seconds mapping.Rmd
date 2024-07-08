@@ -1,0 +1,183 @@
+---
+title: "current 5 seconds mapping"
+output: html_document
+date: "2022-11-02"
+---
+
+
+```{r load library, include=FALSE}
+
+
+library(lmtest)
+library(tidyverse)
+library(stats)
+library(dplyr)
+library(purrr)
+library(timetk)
+library(pracma)
+library(ggplot2)
+library(ggfortify)
+library(egg)
+library(gridExtra)
+library(aTSA)
+library(autoReg)
+library(imputeTS)
+library(TSstudio)
+library(oce)
+library(plotly)
+library(base)
+library(lmtest)
+library(tidyverse)
+library(stats)
+library(dplyr)
+library(purrr)
+library(timetk)
+library(pracma)
+library(ggplot2)
+library(ggfortify)
+library(egg)
+library(gridExtra)
+library(aTSA)
+library(autoReg)
+library(RTransferEntropy)
+options(warn=-1)
+library(tseries)
+
+# load("data/hr_cleaned.RData")
+# load("data/bp_cleaned.RData")
+# load("data/rsp_cleaned.RData")
+
+load("/Users/christinekuryla/Documents/A_Columbia_Research/MiSBIE/misbie/TE_downloaded/transfer entropy/data/bp_cleaned.RData")
+load("/Users/christinekuryla/Documents/A_Columbia_Research/MiSBIE/misbie/TE_downloaded/transfer entropy/data/hr_cleaned.RData")
+load("/Users/christinekuryla/Documents/A_Columbia_Research/MiSBIE/misbie/TE_downloaded/transfer entropy/data/rsp_cleaned.RData")
+condition <- read_csv("/Users/christinekuryla/Documents/A_Columbia_Research/MiSBIE/misbie/TE_downloaded/transfer entropy/data/patient condition.csv")
+
+
+hr_cleaned %>% 
+#comb_df %>% 
+  filter(period == "CP") %>% 
+  select(id, condition) %>% 
+  group_by(condition) %>% 
+  summarize(count = n_distinct(id))
+
+```
+
+### 5 seconds mapping for hr and respiratory
+```{r laod data and data preprocessing}
+## heart rate
+#load("data/hr_cleaned.RData")
+hr_df = hr_cleaned 
+hr_df = hr_df %>% ungroup()
+
+## map to 5 seconds intervals
+max(hr_df$time, na.rm = T)
+time_break = seq(0, 1242, 1)
+hr_df = hr_df %>% 
+  mutate(interval = cut(hr_df$time, breaks = time_break)) %>%
+  group_by(id, period, interval) %>%
+  mutate(rate_mean = mean(rate)) 
+
+
+# remain the distinct column of rate_mean
+hr_cleaned = hr_df %>%  
+  select(id, period, interval, rate_mean) %>% distinct() %>%
+  group_by(id) %>%
+  mutate(diff = rate_mean - lag(rate_mean)) 
+
+## respiratory
+#load("data/rsp_cleaned.RData")
+rsp_df = rsp_cleaned 
+rsp_df = rsp_df %>% ungroup()
+
+## map to 5 seconds intervals
+summary(rsp_df$pSec, na.rm = T)
+time_break = seq(0, 1665, 1)
+rsp_df = rsp_df %>% 
+  mutate(interval = cut(rsp_df$pSec, breaks = time_break)) %>%
+  group_by(id, period, interval) %>% mutate(interval = as.numeric(interval))
+
+
+# remain the distinct column of rate_mean
+rsp_cleaned = rsp_df %>%  
+  select(id, period, interval, pVal, rate) %>% distinct() %>%
+  group_by(id) %>%
+  mutate(diff = pVal - lag(pVal))
+
+## blood pressure
+#load("data/bp_cleaned.RData")
+bp_df = bp_cleaned 
+bp_df = bp_df %>% ungroup()
+
+## map to 5 seconds intervals
+max(bp_df$pSec, na.rm = T)
+time_break = seq(0, 1243, 1)
+bp_df = bp_df %>% 
+  mutate(interval = cut(bp_df$pSec, breaks = time_break)) %>%
+  group_by(id, period, interval) %>%
+  mutate(pval_mean = mean(pVal)) 
+
+# remain the distinct column of rate_mean
+bp_cleaned = bp_df %>%  
+  select(id, period, interval, pval_mean) %>% distinct() %>%
+  group_by(id) %>%
+  mutate(diff = pval_mean - lag(pval_mean)) 
+
+unique(rsp_cleaned$id)
+```
+
+
+
+
+## patient condition
+
+```{r}
+#condition = read_csv("patient condition.csv") %>%
+condition = condition %>%
+  mutate(id = tolower(subject_id), condition = pi_geneticdiagnosistype) %>%
+  select(id, condition)
+
+hr_cleaned = left_join(hr_cleaned, condition)
+hr_cleaned = hr_cleaned %>% mutate(a = case_when
+          (condition == 0 ~ "control", condition == 2 ~ "Deletion", 
+            condition == 1 | condition == 3 ~ "Mutation", condition == 4 ~ "other")) %>%
+  mutate(condition = a) %>% select(-a)
+
+bp_cleaned = left_join(bp_cleaned, condition)
+bp_cleaned = bp_cleaned %>% mutate(a = case_when
+          (condition == 0 ~ "control", condition == 2 ~ "Deletion", 
+            condition == 1 | condition == 3 ~ "Mutation", condition == 4 ~ "other")) %>%
+  mutate(condition = a) %>% select(-a)
+
+rsp_cleaned = left_join(rsp_cleaned, condition)
+rsp_cleaned = rsp_cleaned %>% mutate(a = case_when
+          (condition == 0 ~ "control", condition == 2 ~ "Deletion", 
+            condition == 1 | condition == 3 ~ "Mutation", condition == 4 ~ "other")) %>%
+  mutate(condition = a) %>% select(-a)
+
+rsp_cleaned %>% filter(id == "mi003")
+
+unique(hr_df$id)
+  
+condition %>%
+  filter(id %in% unique(hr_cleaned$id)) %>%
+  group_by(condition) %>% summarise(n = n()) %>% mutate(condition = case_when
+          (condition == 0 ~ "control", condition == 2 ~ "Deletion", 
+            condition == 1 | condition == 3 ~ "Mutation"))
+
+
+unique(hr_cleaned$id)
+```
+
+
+```{r}
+bp_cleaned %>% filter(id == "mi054") %>% filter(period == "ST")
+
+
+```
+
+```{r}
+
+saveRDS(comb_df, file = "/Users/christinekuryla/Documents/A_Columbia_Research/MiSBIE/misbie/comb_df_20240205.RData")
+
+```
+

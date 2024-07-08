@@ -1,0 +1,688 @@
+---
+title: "TE compute for 12 period"
+output: html_document
+date: "2023-06-25"
+---
+```{r}
+library(plotly)
+```
+
+
+```{r}
+id_bp = unique(bp_cleaned$id)
+id_hr = unique(hr_cleaned$id)
+id_rsp = unique(rsp_cleaned$id)
+
+comb_df = left_join((hr_cleaned  %>% filter(id %in% id_bp)), bp_cleaned, by = c("id", "period", "interval", "condition")) %>%
+  mutate(interval = as.numeric(interval)) %>%
+  select(-diff.x, -diff.y)
+
+comb_df$period <- factor(comb_df$period, levels=c('1','2','3','4','5','6','7','8','9','10','11','12','CP','DBT','SST','ST','C3'))
+
+comb_df = left_join((comb_df %>% filter(id %in% id_rsp)), rsp_cleaned, by = c("id", "period", "interval", "condition"))  %>% 
+  mutate(period = as.factor(period)) %>%
+  arrange(id, period, interval) %>%
+  select(-diff) %>% filter(period %in% c("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12")) %>%
+  arrange(id, period)
+
+unique(comb_df$period)
+
+## combine period as base, pre, task and post
+comb_df$period = as.numeric(comb_df$period)
+
+comb_df$period[comb_df$period == 1] <- "base"
+comb_df$period[comb_df$period == 2] <- "pre"
+comb_df$period[comb_df$period %in% c(3,4,5)] <- "task"
+comb_df$period[comb_df$period %in% c(6,7,8,9,10,11,12)] <- "post"
+
+comb_df = comb_df %>%                               
+  group_by(id, period) %>%
+  mutate(interval = row_number())
+
+
+```
+
+## data cleaning
+```{r}
+# remove outliers
+comb_df = comb_df %>% filter(id != "mi035") %>% filter(id != "mi019") %>% filter(id != "mi024")
+
+## remove outliers observation for individuals
+for (i in 1:nrow(comb_df)) {
+  if (comb_df$rate_mean[i] < 10| comb_df$rate_mean[i] > 350| is.na(comb_df$rate_mean[i]))
+    {comb_df$rate_mean[i] = NA}
+  if (comb_df$rate[i] < 1| comb_df$rate[i] > 100| is.na(comb_df$rate[i])) 
+    {comb_df$rate[i] = NA}
+  if (comb_df$pval_mean[i] < 0| comb_df$pval_mean[i] > 500| is.na(comb_df$pval_mean[i]))
+    {comb_df$pval_mean[i] = NA}
+}
+
+
+unique(comb_df$period)
+unique(comb_df$id)
+```
+
+
+### plot
+```{r}
+p_hr = ggplot(comb_df, aes(x = interval, y = rate_mean, group = id, color = condition)) + 
+  geom_smooth(se = FALSE, size = 0.2) +
+  facet_wrap(~ period) + ggtitle("Heart Rate") 
+#ggplotly(p_hr, mode = "markers", color = ~state, colors = "Set1")
+
+p_bp = ggplot(comb_df, aes(x = interval, y = pval_mean, group = id, color = condition)) + 
+  geom_smooth(se = FALSE, size = 0.2) +
+  facet_wrap(~ period) + ggtitle("Blood Pressure")
+#ggplotly(p_bp, mode = "markers", color = ~state, colors = "Set1")
+
+p_rsp = ggplot(comb_df, aes(x = interval, y = rate, group = id, color = condition)) + 
+  geom_smooth(se = FALSE, size = 0.2) +
+  facet_wrap(~ period) + ggtitle("Respiration Rate")
+#ggplotly(p_rsp, mode = "markers", color = ~state, colors = "Set1")
+
+p_hr; p_bp; p_rsp
+ggplotly(p_hr, mode = "markers", color = ~state, colors = "Set1")
+ggplotly(p_bp, mode = "markers", color = ~state, colors = "Set1")
+ggplotly(p_rsp, mode = "markers", color = ~state, colors = "Set1")
+
+```
+
+* outliers: mi035, mi019, mi024
+
+```{r}
+mi = comb_df %>% filter(id %in% c("mi002")) 
+
+mi %>% 
+  ggplot(aes(x = interval, y = rate, group = id, color = id)) + 
+  geom_point(size = 0.5) +
+  facet_wrap(~ period) 
+
+mi$rate = na_interpolation(mi$rate, option = "stine")
+
+mi %>% 
+  ggplot(aes(x = interval, y = rate, group = id, color = id)) + 
+  geom_point(size = 0.5) +
+  facet_wrap(~ period) 
+
+
+```
+
+## data cleaning
+
+```{r}
+boundary = comb_df %>% group_by(id, period) %>%
+  mutate(upper_hr = max(rate_mean, na.rm = TRUE), lower_hr = min(rate_mean, na.rm = TRUE),
+         upper_bp = max(pval_mean, na.rm = TRUE), lower_bp = min(pval_mean, na.rm = TRUE),
+         upper_rsp = max(rate, na.rm = TRUE), lower_rsp = min(rate, na.rm = TRUE)) %>%
+  select(id, period, upper_hr, lower_hr, upper_bp, lower_bp, upper_rsp, lower_rsp) %>%
+  distinct()
+```
+
+
+```{r}
+h = 1
+
+for (i in 1:length(unique(comb_df$id))) {
+  
+  cur_id = as.character(unique(comb_df$id)[i])
+  cur = comb_df %>% filter(id == cur_id)
+  
+  for (j in c("base", "pre", "task", "post")) {
+    
+    n = nrow(cur %>% filter(period == j))
+    
+    ## just for fixing the form, some missing value are not shown as NA, we need them to been shown as NA
+    if (nrow(cur %>% filter(period == j)) == 0) {} else if 
+    (sum(is.na((cur %>% filter(period == j))$rate_mean)) == n |
+     sum(is.na((cur %>% filter(period == j))$pval_mean)) == n |
+     sum(is.na((cur %>% filter(period == j))$pVal)) == n |
+     sum(is.na((cur %>% filter(period == j))$rate)) == n) {
+      
+      comb_df$rate_mean[h:(n+h-1)] = rep(NA, n)
+      comb_df$pval_mean[h:(n+h-1)] = rep(NA, n)
+      comb_df$pVal[h:(n+h-1)] = rep(NA, n)
+      comb_df$rate[h:(n+h-1)] = rep(NA, n)
+      h = h + n
+      
+    } else {
+      
+      cur_rate_mean = na_interpolation((cur %>% filter(period == j))$rate_mean, option = "spline")
+      cur_pval_mean = na_interpolation((cur %>% filter(period == j))$pval_mean, option = "spline")
+      cur_pval_rsp = na_interpolation((cur %>% filter(period == j))$pVal, option = "spline")
+      cur_rate_rsp = na_interpolation((cur %>% filter(period == j))$rate, option = "spline")
+      
+      comb_df$rate_mean[h:(n+h-1)] = cur_rate_mean
+      comb_df$pval_mean[h:(n+h-1)] = cur_pval_mean
+      comb_df$pVal[h:(n+h-1)] = cur_pval_rsp
+      comb_df$rate[h:(n+h-1)] = cur_rate_rsp
+    
+      h = h + n
+    }
+  }
+}
+
+comb_df[rowSums(is.na(comb_df)) > 0,] %>% group_by(id, period) %>% count()
+comb_df = comb_df %>% filter(id != "mi012") %>% filter(id != "mi058")
+```
+
+```{r}
+comb_df = comb_df %>% filter(id != "mi009") %>% filter(id != "mi050")
+h = 1
+for (i in 1:length(unique(comb_df$id))) {
+  
+  cur_id = as.character(unique(comb_df$id)[i])
+  
+  for (j in c("base", "pre", "task", "post")) {
+    cur = comb_df %>% filter(id == cur_id, period == j)
+    n = nrow(cur)
+    
+    hr_upper = (boundary %>% filter(id == cur_id, period == j))$upper_hr
+    hr_lower = (boundary %>% filter(id == cur_id, period == j))$lower_hr
+    hr = ifelse(cur$rate_mean < hr_upper, cur$rate_mean, hr_upper)
+    hr = ifelse(hr > hr_lower, hr, hr_lower)
+    
+    bp_upper = (boundary %>% filter(id == cur_id, period == j))$upper_bp
+    bp_lower = (boundary %>% filter(id == cur_id, period == j))$lower_bp
+    bp = ifelse(cur$pval_mean < bp_upper, cur$pval_mean, bp_upper)
+    bp = ifelse(bp > bp_lower, bp, bp_lower)
+    
+    rsp_upper = (boundary %>% filter(id == cur_id, period == j))$upper_rsp
+    rsp_lower = (boundary %>% filter(id == cur_id, period == j))$lower_rsp
+    rsp = ifelse(cur$rate < rsp_upper, cur$rate, rsp_upper)
+    rsp = ifelse(rsp > rsp_lower, rsp, rsp_lower)
+    
+    comb_df$rate_mean[h:(n+h-1)] = hr
+    comb_df$pval_mean[h:(n+h-1)] = bp
+    comb_df$rate[h:(n+h-1)] = rsp
+    
+    h = h + n
+  }
+}
+
+
+comb_df %>% group_by(id) %>% count(period)
+
+```
+
+#### plot
+```{r}
+p_hr = ggplot(comb_df, aes(x = interval, y = rate_mean, group = id, color = condition)) + 
+  geom_smooth(se = FALSE, size = 0.2) +
+  facet_wrap(~ period) + ggtitle("Heart Rate") 
+#ggplotly(p_hr, mode = "markers", color = ~state, colors = "Set1")
+
+p_bp = ggplot(comb_df, aes(x = interval, y = pval_mean, group = id, color = condition)) + 
+  geom_smooth(se = FALSE, size = 0.2) +
+  facet_wrap(~ period) + ggtitle("Blood Pressure")
+#ggplotly(p_bp, mode = "markers", color = ~state, colors = "Set1")
+
+p_rsp = ggplot(comb_df, aes(x = interval, y = rate, group = id, color = condition)) + 
+  geom_smooth(se = FALSE, size = 0.2) +
+  facet_wrap(~ period) + ggtitle("Respiration Rate")
+#ggplotly(p_rsp, mode = "markers", color = ~state, colors = "Set1")
+
+p_hr; p_bp; p_rsp
+
+#ggplotly(p_hr, mode = "markers", color = ~state, colors = "Set1")
+#ggplotly(p_bp, mode = "markers", color = ~state, colors = "Set1")
+ggplotly(p_rsp, mode = "markers", color = ~state, colors = "Set1")
+```
+
+## data cleaning
+```{r}
+comb_df = comb_df %>% group_by(id, period) %>%
+  mutate(rate_diff = rate_mean - lag(rate_mean),
+         pval_diff = pval_mean - lag(pval_mean),
+         pval_rsp_diff = pVal - lag(pVal),
+         rate_rsp_diff = rate - lag(rate)) %>%
+  rename(rate_hr = rate_mean, rate_hr_diff = rate_diff,
+         pval_bp = pval_mean, pval_bp_diff = pval_diff,
+         pval_rsp = pVal, rate_rsp = rate) %>%
+  mutate(interval = as.integer(interval)) %>% drop_na()
+
+
+
+
+base_df = comb_df  %>% arrange(id, period, interval) %>% filter(period == "base")
+base_control = base_df %>% filter(condition == "control") 
+base_13 = base_df %>% filter(condition == "Mutation") 
+base_2 = base_df %>% filter(condition == "Deletion") 
+
+pre_df = comb_df  %>% arrange(id, period, interval) %>% filter(period == "pre")
+pre_control = pre_df %>% filter(condition == "control") 
+pre_13 = pre_df %>% filter(condition == "Mutation") 
+pre_2 = pre_df %>% filter(condition == "Deletion") 
+
+task_df = comb_df  %>% arrange(id, period, interval) %>% filter(period == "task")
+task_control = task_df %>% filter(condition == "control") 
+task_13 = task_df %>% filter(condition == "Mutation") 
+task_2 = task_df %>% filter(condition == "Deletion") 
+
+post_df = comb_df  %>% arrange(id, period, interval) %>% filter(period == "post")
+post_control = post_df %>% filter(condition == "control") 
+post_13 = post_df %>% filter(condition == "Mutation") 
+post_2 = post_df %>% filter(condition == "Deletion") 
+
+```
+
+
+
+## TE compute
+#### base
+
+```{r}
+unique(base_control$id)
+sum_p1 = base_control %>% group_by(id) %>% summarize(num_obs = n()) 
+
+trans_res_base_lag_control = sum_p1 %>% select(id, num_obs) %>% mutate(a = NA, b = NA, c = NA, d = NA, e = NA, f = NA)
+trans_sig_base_lag_control = sum_p1 %>% select(id, num_obs) %>% mutate(a = NA, b = NA, c = NA, d = NA, e = NA, f = NA)
+
+i = 1
+for (i in 1:nrow(trans_res_base_lag_control)) {
+  
+   cur_id = as.character(trans_res_base_lag_control[i,1])
+   cur = base_control %>% filter(id == cur_id)
+   
+   TE1 = transfer_entropy(cur$rate_hr_diff, cur$pval_bp_diff, type = 'quantiles',  lx = 3, ly = 3)
+   TE2 = transfer_entropy(cur$rate_hr_diff, cur$rate_rsp_diff, type = 'quantiles',  lx = 3, ly = 3)
+   TE3 = transfer_entropy(cur$pval_bp_diff, cur$rate_rsp_diff, type = 'quantiles',  lx = 3, ly = 3)
+   
+   trans_res_base_lag_control$a[i] = TE1$coef[1, 1]
+   trans_res_base_lag_control$b[i] = TE1$coef[2, 1]
+   trans_res_base_lag_control$c[i] = TE2$coef[1, 1]
+   trans_res_base_lag_control$d[i] = TE2$coef[2, 1]
+   trans_res_base_lag_control$e[i] = TE3$coef[1, 1]
+   trans_res_base_lag_control$f[i] = TE3$coef[2, 1]
+   
+   trans_sig_base_lag_control$a[i] = TE1$coef[1, 4]
+   trans_sig_base_lag_control$b[i] = TE1$coef[2, 4]
+   trans_sig_base_lag_control$c[i] = TE2$coef[1, 4]
+   trans_sig_base_lag_control$d[i] = TE2$coef[2, 4]
+   trans_sig_base_lag_control$e[i] = TE3$coef[1, 4]
+   trans_sig_base_lag_control$f[i] = TE3$coef[2, 4]
+   
+}
+
+## group 13
+unique(base_13$id)
+sum_p1 = base_13 %>% group_by(id) %>% summarize(num_obs = n()) 
+
+trans_res_base_lag_13 = sum_p1 %>% select(id, num_obs) %>% mutate(a = NA, b = NA, c = NA, d = NA, e = NA, f = NA)
+trans_sig_base_lag_13 = sum_p1 %>% select(id, num_obs) %>% mutate(a = NA, b = NA, c = NA, d = NA, e = NA, f = NA)
+
+i = 1
+for (i in 1:nrow(trans_res_base_lag_13)) {
+  
+   cur_id = as.character(trans_res_base_lag_13[i,1])
+   cur = base_13 %>% filter(id == cur_id)
+   
+   TE1 = transfer_entropy(cur$rate_hr_diff, cur$pval_bp_diff,type = 'quantiles',  lx = 3, ly = 3)
+   TE2 = transfer_entropy(cur$rate_hr_diff, cur$rate_rsp_diff,type = 'quantiles',  lx = 3, ly = 3)
+   TE3 = transfer_entropy(cur$pval_bp_diff, cur$rate_rsp_diff,type = 'quantiles',  lx = 3, ly = 3)
+   
+   trans_res_base_lag_13$a[i] = TE1$coef[1, 1]
+   trans_res_base_lag_13$b[i] = TE1$coef[2, 1]
+   trans_res_base_lag_13$c[i] = TE2$coef[1, 1]
+   trans_res_base_lag_13$d[i] = TE2$coef[2, 1]
+   trans_res_base_lag_13$e[i] = TE3$coef[1, 1]
+   trans_res_base_lag_13$f[i] = TE3$coef[2, 1]
+   
+   trans_sig_base_lag_13$a[i] = TE1$coef[1, 4]
+   trans_sig_base_lag_13$b[i] = TE1$coef[2, 4]
+   trans_sig_base_lag_13$c[i] = TE2$coef[1, 4]
+   trans_sig_base_lag_13$d[i] = TE2$coef[2, 4]
+   trans_sig_base_lag_13$e[i] = TE3$coef[1, 4]
+   trans_sig_base_lag_13$f[i] = TE3$coef[2, 4]
+}
+
+
+## group 2
+unique(base_2$id)
+sum_p1 = base_2 %>% group_by(id) %>% summarize(num_obs = n()) 
+
+trans_res_base_lag_2 = sum_p1 %>% select(id, num_obs) %>% mutate(a = NA, b = NA, c = NA, d = NA, e = NA, f = NA)
+trans_sig_base_lag_2 = sum_p1 %>% select(id, num_obs) %>% mutate(a = NA, b = NA, c = NA, d = NA, e = NA, f = NA)
+
+i = 1
+for (i in 1:nrow(trans_res_base_lag_2)) {
+  
+   cur_id = as.character(trans_res_base_lag_2[i,1])
+   cur = base_2 %>% filter(id == cur_id)
+   
+   TE1 = transfer_entropy(cur$rate_hr_diff, cur$pval_bp_diff,type = 'quantiles',  lx = 3, ly = 3)
+   TE2 = transfer_entropy(cur$rate_hr_diff, cur$rate_rsp_diff,type = 'quantiles',  lx = 3, ly = 3)
+   TE3 = transfer_entropy(cur$pval_bp_diff, cur$rate_rsp_diff,type = 'quantiles',  lx = 3, ly = 3)
+   
+   trans_res_base_lag_2$a[i] = TE1$coef[1, 1]
+   trans_res_base_lag_2$b[i] = TE1$coef[2, 1]
+   trans_res_base_lag_2$c[i] = TE2$coef[1, 1]
+   trans_res_base_lag_2$d[i] = TE2$coef[2, 1]
+   trans_res_base_lag_2$e[i] = TE3$coef[1, 1]
+   trans_res_base_lag_2$f[i] = TE3$coef[2, 1]
+   
+   trans_sig_base_lag_2$a[i] = TE1$coef[1, 4]
+   trans_sig_base_lag_2$b[i] = TE1$coef[2, 4]
+   trans_sig_base_lag_2$c[i] = TE2$coef[1, 4]
+   trans_sig_base_lag_2$d[i] = TE2$coef[2, 4]
+   trans_sig_base_lag_2$e[i] = TE3$coef[1, 4]
+   trans_sig_base_lag_2$f[i] = TE3$coef[2, 4]
+}
+
+```
+
+#### pre
+
+```{r}
+unique(pre_control$id)
+sum_p1 = pre_control %>% group_by(id) %>% summarize(num_obs = n()) 
+
+trans_res_pre_lag_control = sum_p1 %>% select(id, num_obs) %>% mutate(a = NA, b = NA, c = NA, d = NA, e = NA, f = NA)
+trans_sig_pre_lag_control = sum_p1 %>% select(id, num_obs) %>% mutate(a = NA, b = NA, c = NA, d = NA, e = NA, f = NA)
+
+i = 1
+for (i in 1:nrow(trans_res_pre_lag_control)) {
+  
+   cur_id = as.character(trans_res_pre_lag_control[i,1])
+   cur = pre_control %>% filter(id == cur_id)
+   
+   TE1 = transfer_entropy(cur$rate_hr_diff, cur$pval_bp_diff, type = 'quantiles',  lx = 3, ly = 3)
+   TE2 = transfer_entropy(cur$rate_hr_diff, cur$rate_rsp_diff, type = 'quantiles',  lx = 3, ly = 3)
+   TE3 = transfer_entropy(cur$pval_bp_diff, cur$rate_rsp_diff, type = 'quantiles',  lx = 3, ly = 3)
+   
+   trans_res_pre_lag_control$a[i] = TE1$coef[1, 1]
+   trans_res_pre_lag_control$b[i] = TE1$coef[2, 1]
+   trans_res_pre_lag_control$c[i] = TE2$coef[1, 1]
+   trans_res_pre_lag_control$d[i] = TE2$coef[2, 1]
+   trans_res_pre_lag_control$e[i] = TE3$coef[1, 1]
+   trans_res_pre_lag_control$f[i] = TE3$coef[2, 1]
+   
+   trans_sig_pre_lag_control$a[i] = TE1$coef[1, 4]
+   trans_sig_pre_lag_control$b[i] = TE1$coef[2, 4]
+   trans_sig_pre_lag_control$c[i] = TE2$coef[1, 4]
+   trans_sig_pre_lag_control$d[i] = TE2$coef[2, 4]
+   trans_sig_pre_lag_control$e[i] = TE3$coef[1, 4]
+   trans_sig_pre_lag_control$f[i] = TE3$coef[2, 4]
+   
+}
+
+## group 13
+unique(pre_13$id)
+sum_p1 = pre_13 %>% group_by(id) %>% summarize(num_obs = n()) 
+
+trans_res_pre_lag_13 = sum_p1 %>% select(id, num_obs) %>% mutate(a = NA, b = NA, c = NA, d = NA, e = NA, f = NA)
+trans_sig_pre_lag_13 = sum_p1 %>% select(id, num_obs) %>% mutate(a = NA, b = NA, c = NA, d = NA, e = NA, f = NA)
+
+i = 1
+for (i in 1:nrow(trans_res_pre_lag_13)) {
+  
+   cur_id = as.character(trans_res_pre_lag_13[i,1])
+   cur = pre_13 %>% filter(id == cur_id)
+   
+   TE1 = transfer_entropy(cur$rate_hr_diff, cur$pval_bp_diff,type = 'quantiles',  lx = 3, ly = 3)
+   TE2 = transfer_entropy(cur$rate_hr_diff, cur$rate_rsp_diff,type = 'quantiles',  lx = 3, ly = 3)
+   TE3 = transfer_entropy(cur$pval_bp_diff, cur$rate_rsp_diff,type = 'quantiles',  lx = 3, ly = 3)
+   
+   trans_res_pre_lag_13$a[i] = TE1$coef[1, 1]
+   trans_res_pre_lag_13$b[i] = TE1$coef[2, 1]
+   trans_res_pre_lag_13$c[i] = TE2$coef[1, 1]
+   trans_res_pre_lag_13$d[i] = TE2$coef[2, 1]
+   trans_res_pre_lag_13$e[i] = TE3$coef[1, 1]
+   trans_res_pre_lag_13$f[i] = TE3$coef[2, 1]
+   
+   trans_sig_pre_lag_13$a[i] = TE1$coef[1, 4]
+   trans_sig_pre_lag_13$b[i] = TE1$coef[2, 4]
+   trans_sig_pre_lag_13$c[i] = TE2$coef[1, 4]
+   trans_sig_pre_lag_13$d[i] = TE2$coef[2, 4]
+   trans_sig_pre_lag_13$e[i] = TE3$coef[1, 4]
+   trans_sig_pre_lag_13$f[i] = TE3$coef[2, 4]
+}
+
+
+## group 2
+unique(pre_2$id)
+sum_p1 = pre_2 %>% group_by(id) %>% summarize(num_obs = n()) 
+
+trans_res_pre_lag_2 = sum_p1 %>% select(id, num_obs) %>% mutate(a = NA, b = NA, c = NA, d = NA, e = NA, f = NA)
+trans_sig_pre_lag_2 = sum_p1 %>% select(id, num_obs) %>% mutate(a = NA, b = NA, c = NA, d = NA, e = NA, f = NA)
+
+i = 1
+for (i in 1:nrow(trans_res_pre_lag_2)) {
+  
+   cur_id = as.character(trans_res_pre_lag_2[i,1])
+   cur = pre_2 %>% filter(id == cur_id)
+   
+   TE1 = transfer_entropy(cur$rate_hr_diff, cur$pval_bp_diff,type = 'quantiles',  lx = 3, ly = 3)
+   TE2 = transfer_entropy(cur$rate_hr_diff, cur$rate_rsp_diff,type = 'quantiles',  lx = 3, ly = 3)
+   TE3 = transfer_entropy(cur$pval_bp_diff, cur$rate_rsp_diff,type = 'quantiles',  lx = 3, ly = 3)
+   
+   trans_res_pre_lag_2$a[i] = TE1$coef[1, 1]
+   trans_res_pre_lag_2$b[i] = TE1$coef[2, 1]
+   trans_res_pre_lag_2$c[i] = TE2$coef[1, 1]
+   trans_res_pre_lag_2$d[i] = TE2$coef[2, 1]
+   trans_res_pre_lag_2$e[i] = TE3$coef[1, 1]
+   trans_res_pre_lag_2$f[i] = TE3$coef[2, 1]
+   
+   trans_sig_pre_lag_2$a[i] = TE1$coef[1, 4]
+   trans_sig_pre_lag_2$b[i] = TE1$coef[2, 4]
+   trans_sig_pre_lag_2$c[i] = TE2$coef[1, 4]
+   trans_sig_pre_lag_2$d[i] = TE2$coef[2, 4]
+   trans_sig_pre_lag_2$e[i] = TE3$coef[1, 4]
+   trans_sig_pre_lag_2$f[i] = TE3$coef[2, 4]
+}
+
+```
+
+#### task
+
+```{r}
+unique(task_control$id)
+sum_p1 = task_control %>% group_by(id) %>% summarize(num_obs = n()) 
+
+trans_res_task_lag_control = sum_p1 %>% select(id, num_obs) %>% mutate(a = NA, b = NA, c = NA, d = NA, e = NA, f = NA)
+trans_sig_task_lag_control = sum_p1 %>% select(id, num_obs) %>% mutate(a = NA, b = NA, c = NA, d = NA, e = NA, f = NA)
+
+i = 1
+for (i in 1:nrow(trans_res_task_lag_control)) {
+  
+   cur_id = as.character(trans_res_task_lag_control[i,1])
+   cur = task_control %>% filter(id == cur_id)
+   
+   TE1 = transfer_entropy(cur$rate_hr_diff, cur$pval_bp_diff, type = 'quantiles',  lx = 3, ly = 3)
+   TE2 = transfer_entropy(cur$rate_hr_diff, cur$rate_rsp_diff, type = 'quantiles',  lx = 3, ly = 3)
+   TE3 = transfer_entropy(cur$pval_bp_diff, cur$rate_rsp_diff, type = 'quantiles',  lx = 3, ly = 3)
+   
+   trans_res_task_lag_control$a[i] = TE1$coef[1, 1]
+   trans_res_task_lag_control$b[i] = TE1$coef[2, 1]
+   trans_res_task_lag_control$c[i] = TE2$coef[1, 1]
+   trans_res_task_lag_control$d[i] = TE2$coef[2, 1]
+   trans_res_task_lag_control$e[i] = TE3$coef[1, 1]
+   trans_res_task_lag_control$f[i] = TE3$coef[2, 1]
+   
+   trans_sig_task_lag_control$a[i] = TE1$coef[1, 4]
+   trans_sig_task_lag_control$b[i] = TE1$coef[2, 4]
+   trans_sig_task_lag_control$c[i] = TE2$coef[1, 4]
+   trans_sig_task_lag_control$d[i] = TE2$coef[2, 4]
+   trans_sig_task_lag_control$e[i] = TE3$coef[1, 4]
+   trans_sig_task_lag_control$f[i] = TE3$coef[2, 4]
+   
+}
+
+## group 13
+unique(task_13$id)
+sum_p1 = task_13 %>% group_by(id) %>% summarize(num_obs = n()) 
+
+trans_res_task_lag_13 = sum_p1 %>% select(id, num_obs) %>% mutate(a = NA, b = NA, c = NA, d = NA, e = NA, f = NA)
+trans_sig_task_lag_13 = sum_p1 %>% select(id, num_obs) %>% mutate(a = NA, b = NA, c = NA, d = NA, e = NA, f = NA)
+
+i = 1
+for (i in 1:nrow(trans_res_task_lag_13)) {
+  
+   cur_id = as.character(trans_res_task_lag_13[i,1])
+   cur = task_13 %>% filter(id == cur_id)
+   
+   TE1 = transfer_entropy(cur$rate_hr_diff, cur$pval_bp_diff,type = 'quantiles',  lx = 3, ly = 3)
+   TE2 = transfer_entropy(cur$rate_hr_diff, cur$rate_rsp_diff,type = 'quantiles',  lx = 3, ly = 3)
+   TE3 = transfer_entropy(cur$pval_bp_diff, cur$rate_rsp_diff,type = 'quantiles',  lx = 3, ly = 3)
+   
+   trans_res_task_lag_13$a[i] = TE1$coef[1, 1]
+   trans_res_task_lag_13$b[i] = TE1$coef[2, 1]
+   trans_res_task_lag_13$c[i] = TE2$coef[1, 1]
+   trans_res_task_lag_13$d[i] = TE2$coef[2, 1]
+   trans_res_task_lag_13$e[i] = TE3$coef[1, 1]
+   trans_res_task_lag_13$f[i] = TE3$coef[2, 1]
+   
+   trans_sig_task_lag_13$a[i] = TE1$coef[1, 4]
+   trans_sig_task_lag_13$b[i] = TE1$coef[2, 4]
+   trans_sig_task_lag_13$c[i] = TE2$coef[1, 4]
+   trans_sig_task_lag_13$d[i] = TE2$coef[2, 4]
+   trans_sig_task_lag_13$e[i] = TE3$coef[1, 4]
+   trans_sig_task_lag_13$f[i] = TE3$coef[2, 4]
+}
+
+
+## group 2
+unique(task_2$id)
+sum_p1 = task_2 %>% group_by(id) %>% summarize(num_obs = n()) 
+
+trans_res_task_lag_2 = sum_p1 %>% select(id, num_obs) %>% mutate(a = NA, b = NA, c = NA, d = NA, e = NA, f = NA)
+trans_sig_task_lag_2 = sum_p1 %>% select(id, num_obs) %>% mutate(a = NA, b = NA, c = NA, d = NA, e = NA, f = NA)
+
+i = 1
+for (i in 1:nrow(trans_res_task_lag_2)) {
+  
+   cur_id = as.character(trans_res_task_lag_2[i,1])
+   cur = task_2 %>% filter(id == cur_id)
+   
+   TE1 = transfer_entropy(cur$rate_hr_diff, cur$pval_bp_diff,type = 'quantiles',  lx = 3, ly = 3)
+   TE2 = transfer_entropy(cur$rate_hr_diff, cur$rate_rsp_diff,type = 'quantiles',  lx = 3, ly = 3)
+   TE3 = transfer_entropy(cur$pval_bp_diff, cur$rate_rsp_diff,type = 'quantiles',  lx = 3, ly = 3)
+   
+   trans_res_task_lag_2$a[i] = TE1$coef[1, 1]
+   trans_res_task_lag_2$b[i] = TE1$coef[2, 1]
+   trans_res_task_lag_2$c[i] = TE2$coef[1, 1]
+   trans_res_task_lag_2$d[i] = TE2$coef[2, 1]
+   trans_res_task_lag_2$e[i] = TE3$coef[1, 1]
+   trans_res_task_lag_2$f[i] = TE3$coef[2, 1]
+   
+   trans_sig_task_lag_2$a[i] = TE1$coef[1, 4]
+   trans_sig_task_lag_2$b[i] = TE1$coef[2, 4]
+   trans_sig_task_lag_2$c[i] = TE2$coef[1, 4]
+   trans_sig_task_lag_2$d[i] = TE2$coef[2, 4]
+   trans_sig_task_lag_2$e[i] = TE3$coef[1, 4]
+   trans_sig_task_lag_2$f[i] = TE3$coef[2, 4]
+}
+
+```
+
+#### post
+
+```{r}
+unique(post_control$id)
+sum_p1 = post_control %>% group_by(id) %>% summarize(num_obs = n()) 
+
+trans_res_post_lag_control = sum_p1 %>% select(id, num_obs) %>% mutate(a = NA, b = NA, c = NA, d = NA, e = NA, f = NA)
+trans_sig_post_lag_control = sum_p1 %>% select(id, num_obs) %>% mutate(a = NA, b = NA, c = NA, d = NA, e = NA, f = NA)
+
+i = 1
+for (i in 1:nrow(trans_res_post_lag_control)) {
+  
+   cur_id = as.character(trans_res_post_lag_control[i,1])
+   cur = post_control %>% filter(id == cur_id)
+   
+   TE1 = transfer_entropy(cur$rate_hr_diff, cur$pval_bp_diff, type = 'quantiles',  lx = 3, ly = 3)
+   TE2 = transfer_entropy(cur$rate_hr_diff, cur$rate_rsp_diff, type = 'quantiles',  lx = 3, ly = 3)
+   TE3 = transfer_entropy(cur$pval_bp_diff, cur$rate_rsp_diff, type = 'quantiles',  lx = 3, ly = 3)
+   
+   trans_res_post_lag_control$a[i] = TE1$coef[1, 1]
+   trans_res_post_lag_control$b[i] = TE1$coef[2, 1]
+   trans_res_post_lag_control$c[i] = TE2$coef[1, 1]
+   trans_res_post_lag_control$d[i] = TE2$coef[2, 1]
+   trans_res_post_lag_control$e[i] = TE3$coef[1, 1]
+   trans_res_post_lag_control$f[i] = TE3$coef[2, 1]
+   
+   trans_sig_post_lag_control$a[i] = TE1$coef[1, 4]
+   trans_sig_post_lag_control$b[i] = TE1$coef[2, 4]
+   trans_sig_post_lag_control$c[i] = TE2$coef[1, 4]
+   trans_sig_post_lag_control$d[i] = TE2$coef[2, 4]
+   trans_sig_post_lag_control$e[i] = TE3$coef[1, 4]
+   trans_sig_post_lag_control$f[i] = TE3$coef[2, 4]
+   
+}
+
+## group 13
+unique(post_13$id)
+sum_p1 = post_13 %>% group_by(id) %>% summarize(num_obs = n()) 
+
+trans_res_post_lag_13 = sum_p1 %>% select(id, num_obs) %>% mutate(a = NA, b = NA, c = NA, d = NA, e = NA, f = NA)
+trans_sig_post_lag_13 = sum_p1 %>% select(id, num_obs) %>% mutate(a = NA, b = NA, c = NA, d = NA, e = NA, f = NA)
+
+i = 1
+for (i in 1:nrow(trans_res_post_lag_13)) {
+  
+   cur_id = as.character(trans_res_post_lag_13[i,1])
+   cur = post_13 %>% filter(id == cur_id)
+   
+   TE1 = transfer_entropy(cur$rate_hr_diff, cur$pval_bp_diff,type = 'quantiles',  lx = 3, ly = 3)
+   TE2 = transfer_entropy(cur$rate_hr_diff, cur$rate_rsp_diff,type = 'quantiles',  lx = 3, ly = 3)
+   TE3 = transfer_entropy(cur$pval_bp_diff, cur$rate_rsp_diff,type = 'quantiles',  lx = 3, ly = 3)
+   
+   trans_res_post_lag_13$a[i] = TE1$coef[1, 1]
+   trans_res_post_lag_13$b[i] = TE1$coef[2, 1]
+   trans_res_post_lag_13$c[i] = TE2$coef[1, 1]
+   trans_res_post_lag_13$d[i] = TE2$coef[2, 1]
+   trans_res_post_lag_13$e[i] = TE3$coef[1, 1]
+   trans_res_post_lag_13$f[i] = TE3$coef[2, 1]
+   
+   trans_sig_post_lag_13$a[i] = TE1$coef[1, 4]
+   trans_sig_post_lag_13$b[i] = TE1$coef[2, 4]
+   trans_sig_post_lag_13$c[i] = TE2$coef[1, 4]
+   trans_sig_post_lag_13$d[i] = TE2$coef[2, 4]
+   trans_sig_post_lag_13$e[i] = TE3$coef[1, 4]
+   trans_sig_post_lag_13$f[i] = TE3$coef[2, 4]
+}
+
+
+## group 2
+unique(post_2$id)
+sum_p1 = post_2 %>% group_by(id) %>% summarize(num_obs = n()) 
+
+trans_res_post_lag_2 = sum_p1 %>% select(id, num_obs) %>% mutate(a = NA, b = NA, c = NA, d = NA, e = NA, f = NA)
+trans_sig_post_lag_2 = sum_p1 %>% select(id, num_obs) %>% mutate(a = NA, b = NA, c = NA, d = NA, e = NA, f = NA)
+
+i = 1
+for (i in 1:nrow(trans_res_post_lag_2)) {
+  
+   cur_id = as.character(trans_res_post_lag_2[i,1])
+   cur = post_2 %>% filter(id == cur_id)
+   
+   TE1 = transfer_entropy(cur$rate_hr_diff, cur$pval_bp_diff,type = 'quantiles',  lx = 3, ly = 3)
+   TE2 = transfer_entropy(cur$rate_hr_diff, cur$rate_rsp_diff,type = 'quantiles',  lx = 3, ly = 3)
+   TE3 = transfer_entropy(cur$pval_bp_diff, cur$rate_rsp_diff,type = 'quantiles',  lx = 3, ly = 3)
+   
+   trans_res_post_lag_2$a[i] = TE1$coef[1, 1]
+   trans_res_post_lag_2$b[i] = TE1$coef[2, 1]
+   trans_res_post_lag_2$c[i] = TE2$coef[1, 1]
+   trans_res_post_lag_2$d[i] = TE2$coef[2, 1]
+   trans_res_post_lag_2$e[i] = TE3$coef[1, 1]
+   trans_res_post_lag_2$f[i] = TE3$coef[2, 1]
+   
+   trans_sig_post_lag_2$a[i] = TE1$coef[1, 4]
+   trans_sig_post_lag_2$b[i] = TE1$coef[2, 4]
+   trans_sig_post_lag_2$c[i] = TE2$coef[1, 4]
+   trans_sig_post_lag_2$d[i] = TE2$coef[2, 4]
+   trans_sig_post_lag_2$e[i] = TE3$coef[1, 4]
+   trans_sig_post_lag_2$f[i] = TE3$coef[2, 4]
+}
+
+```
+
+
+
+
+
+
+
+
+
+
+

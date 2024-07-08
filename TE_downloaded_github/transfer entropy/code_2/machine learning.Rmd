@@ -1,0 +1,555 @@
+---
+title: "Machine Learning"
+output: html_document
+date: "2023-03-24"
+---
+
+```{r}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(factoextra)
+library(gridExtra)
+library(corrplot)
+library(readxl)
+library(ggplot2)
+library(ggridges)
+library(glmnet)
+library(ISLR)
+library(mlbench)
+library(caret)
+library(randomForest)
+library(ranger)
+library(gbm)
+library(janitor)
+
+```
+
+```{r}
+load("cp-st res_2/original_cp.RData"); load("cp-st res_2/original_cp_sig.RData")
+load("cp-st res_2/original_dbt.RData"); load("cp-st res_2/original_dbt_sig.RData")
+load("cp-st res_2/original_sst.RData"); load("cp-st res_2/original_sst_sig.RData")
+load("cp-st res_2/original_st.RData"); load("cp-st res_2/original_st_sig.RData")
+```
+
+## Data cleaning for PCA
+#### CP - ST
+```{r}
+cp_cleaned = overview_cp %>% 
+  pivot_longer(
+    cols= c(a_Mutation:f_Control), 
+    names_to = c("Direction","Status"), 
+    values_to = "TE_value", 
+    names_sep = "_"
+  ) %>% drop_na(TE_value) %>%
+  pivot_wider(names_from = Direction, values_from = TE_value) %>% mutate(stage = "CP")
+cp_cleaned = as.data.frame(cp_cleaned)
+
+dbt_cleaned = overview_dbt %>% 
+  pivot_longer(
+    cols= c(a_Mutation:f_Control), 
+    names_to = c("Direction","Status"), 
+    values_to = "TE_value", 
+    names_sep = "_"
+  ) %>% drop_na(TE_value) %>%
+  pivot_wider(names_from = Direction, values_from = TE_value) %>% mutate(stage = "DBT")
+dbt_cleaned = as.data.frame(dbt_cleaned)
+
+sst_cleaned = overview_sst %>% 
+  pivot_longer(
+    cols= c(a_Mutation:f_Control), 
+    names_to = c("Direction","Status"), 
+    values_to = "TE_value", 
+    names_sep = "_"
+  ) %>% drop_na(TE_value) %>%
+  pivot_wider(names_from = Direction, values_from = TE_value) %>% mutate(stage = "SST")
+sst_cleaned = as.data.frame(sst_cleaned)
+
+st_cleaned = overview_st %>% 
+  pivot_longer(
+    cols= c(a_Mutation:f_Control), 
+    names_to = c("Direction","Status"), 
+    values_to = "TE_value", 
+    names_sep = "_"
+  ) %>% drop_na(TE_value) %>%
+  pivot_wider(names_from = Direction, values_from = TE_value) %>% mutate(stage = "ST")
+st_cleaned = as.data.frame(st_cleaned)
+
+```
+
+#### base - post
+```{r}
+base_cleaned = overview_base %>% 
+  pivot_longer(
+    cols= c(a_Mutation:f_Control), 
+    names_to = c("Direction","Status"), 
+    values_to = "TE_value", 
+    names_sep = "_"
+  ) %>% drop_na(TE_value) %>%
+  pivot_wider(names_from = Direction, values_from = TE_value) %>% mutate(stage = "base")
+base_cleaned = as.data.frame(base_cleaned)
+
+pre_cleaned = overview_pre %>% 
+  pivot_longer(
+    cols= c(a_Mutation:f_Control), 
+    names_to = c("Direction","Status"), 
+    values_to = "TE_value", 
+    names_sep = "_"
+  ) %>% drop_na(TE_value) %>%
+  pivot_wider(names_from = Direction, values_from = TE_value) %>% mutate(stage = "pre")
+pre_cleaned = as.data.frame(pre_cleaned)
+
+task_cleaned = overview_task %>% 
+  pivot_longer(
+    cols= c(a_Mutation:f_Control), 
+    names_to = c("Direction","Status"), 
+    values_to = "TE_value", 
+    names_sep = "_"
+  ) %>% drop_na(TE_value) %>%
+  pivot_wider(names_from = Direction, values_from = TE_value) %>% mutate(stage = "task")
+task_cleaned = as.data.frame(task_cleaned)
+
+post_cleaned = overview_post %>% 
+  pivot_longer(
+    cols= c(a_Mutation:f_Control), 
+    names_to = c("Direction","Status"), 
+    values_to = "TE_value", 
+    names_sep = "_"
+  ) %>% drop_na(TE_value) %>%
+  pivot_wider(names_from = Direction, values_from = TE_value) %>% mutate(stage = "post")
+post_cleaned = as.data.frame(post_cleaned)
+
+```
+
+#### 12 periods
+
+```{r}
+p1_cleaned = overview_p1 %>% 
+  pivot_longer(cols= c(a_Mutation:f_Control), names_to = c("Direction","Status"), 
+    values_to = "TE_value", names_sep = "_") %>% drop_na(TE_value) %>%
+  pivot_wider(names_from = Direction, values_from = TE_value) %>% mutate(stage = "p1")
+p1_cleaned = as.data.frame(p1_cleaned)
+
+p2_cleaned = overview_p2 %>% 
+  pivot_longer(cols= c(a_Mutation:f_Control), names_to = c("Direction","Status"), 
+    values_to = "TE_value", names_sep = "_") %>% drop_na(TE_value) %>%
+  pivot_wider(names_from = Direction, values_from = TE_value) %>% mutate(stage = "p2")
+p2_cleaned = as.data.frame(p2_cleaned)
+
+p3_cleaned = overview_p3 %>% 
+  pivot_longer(cols= c(a_Mutation:f_Control), names_to = c("Direction","Status"), 
+    values_to = "TE_value", names_sep = "_") %>% drop_na(TE_value) %>%
+  pivot_wider(names_from = Direction, values_from = TE_value) %>% mutate(stage = "p3")
+p3_cleaned = as.data.frame(p3_cleaned)
+
+p4_cleaned = overview_p4 %>% 
+  pivot_longer(cols= c(a_Mutation:f_Control), names_to = c("Direction","Status"), 
+    values_to = "TE_value", names_sep = "_") %>% drop_na(TE_value) %>%
+  pivot_wider(names_from = Direction, values_from = TE_value) %>% mutate(stage = "p4")
+p4_cleaned = as.data.frame(p4_cleaned)
+
+p5_cleaned = overview_p5 %>% 
+  pivot_longer(cols= c(a_Mutation:f_Control), names_to = c("Direction","Status"), 
+    values_to = "TE_value", names_sep = "_") %>% drop_na(TE_value) %>%
+  pivot_wider(names_from = Direction, values_from = TE_value) %>% mutate(stage = "p5")
+p5_cleaned = as.data.frame(p5_cleaned)
+
+p6_cleaned = overview_p6 %>% 
+  pivot_longer(cols= c(a_Mutation:f_Control), names_to = c("Direction","Status"), 
+    values_to = "TE_value", names_sep = "_") %>% drop_na(TE_value) %>%
+  pivot_wider(names_from = Direction, values_from = TE_value) %>% mutate(stage = "p6")
+p6_cleaned = as.data.frame(p6_cleaned)
+
+p7_cleaned = overview_p7 %>% 
+  pivot_longer(cols= c(a_Mutation:f_Control), names_to = c("Direction","Status"), 
+    values_to = "TE_value", names_sep = "_") %>% drop_na(TE_value) %>%
+  pivot_wider(names_from = Direction, values_from = TE_value) %>% mutate(stage = "p7")
+p7_cleaned = as.data.frame(p7_cleaned)
+
+p8_cleaned = overview_p8 %>% 
+  pivot_longer(cols= c(a_Mutation:f_Control), names_to = c("Direction","Status"), 
+    values_to = "TE_value", names_sep = "_") %>% drop_na(TE_value) %>%
+  pivot_wider(names_from = Direction, values_from = TE_value) %>% mutate(stage = "p8")
+p8_cleaned = as.data.frame(p8_cleaned)
+
+p9_cleaned = overview_p9 %>% 
+  pivot_longer(cols= c(a_Mutation:f_Control), names_to = c("Direction","Status"), 
+    values_to = "TE_value", names_sep = "_") %>% drop_na(TE_value) %>%
+  pivot_wider(names_from = Direction, values_from = TE_value) %>% mutate(stage = "p9")
+p9_cleaned = as.data.frame(p9_cleaned)
+
+p10_cleaned = overview_p10 %>% 
+  pivot_longer(cols= c(a_Mutation:f_Control), names_to = c("Direction","Status"), 
+    values_to = "TE_value", names_sep = "_") %>% drop_na(TE_value) %>%
+  pivot_wider(names_from = Direction, values_from = TE_value) %>% mutate(stage = "p10")
+p10_cleaned = as.data.frame(p10_cleaned)
+
+p11_cleaned = overview_p11 %>% 
+  pivot_longer(cols= c(a_Mutation:f_Control), names_to = c("Direction","Status"), 
+    values_to = "TE_value", names_sep = "_") %>% drop_na(TE_value) %>%
+  pivot_wider(names_from = Direction, values_from = TE_value) %>% mutate(stage = "p11")
+p11_cleaned = as.data.frame(p11_cleaned)
+
+p12_cleaned = overview_p12 %>% 
+  pivot_longer(cols= c(a_Mutation:f_Control), names_to = c("Direction","Status"), 
+    values_to = "TE_value", names_sep = "_") %>% drop_na(TE_value) %>%
+  pivot_wider(names_from = Direction, values_from = TE_value) %>% mutate(stage = "p12")
+p12_cleaned = as.data.frame(p12_cleaned)
+
+
+```
+
+
+## Lasso
+
+```{r}
+dbt_cleaned =  dbt_cleaned %>% select(-stage, -id)
+dbt_2 <- model.matrix(Status ~ ., dbt_cleaned)[ ,-1]
+trainRows <- createDataPartition(y = dbt_cleaned$Status, p = 1, list = FALSE)
+
+# matrix of predictors (glmnet uses input matrix)
+x <- dbt_2[trainRows,]
+# vector of response
+y <- dbt_cleaned$Status[trainRows]
+
+cv_model <- cv.glmnet(x, y, type.measure="class",alpha=1, family="multinomial")
+                      
+best_lambda <- cv_model$lambda.min
+best_lambda
+plot(cv_model) 
+
+#find coefficients of best model
+best_model <- glmnet(x, y, alpha = 1, lambda = best_lambda, family="multinomial")
+coef(best_model)
+```
+
+
+```{r}
+y_predict = predict(best_model, s = best_lambda, newx = as.matrix(cp_cleaned[ ,3:8]), "class")
+y_actual = cp_cleaned$Status
+sum(y_predict == y_actual)/50
+```
+
+## Random Forest
+
+```{r}
+rf <- randomForest(as.factor(Status) ~ a+b+c+d+e+f, dbt_cleaned)
+predictions2 = predict(rf, newdata = cp_cleaned, "class")
+confusionMatrix(predictions2, as.factor(cp_cleaned$Status))
+```
+
+## PCA
+#### dbt
+```{r}
+df_cleaned = bind_rows(cp_cleaned, dbt_cleaned, st_cleaned, sst_cleaned)
+data_pca = scale(sst_cleaned[,3:8]);dim(data_pca);length(cp_cleaned[,1])
+rownames(data_pca) <- cp_cleaned[,1]
+
+### PCA
+## Performing PCA and select component
+pca = prcomp(data_pca)
+vars <- apply(pca$x, 2, var)  
+props <- vars / sum(vars)
+cumsum(props) # first 3 components up to around 75% variance
+fviz_eig(pca, addlabels = T) 
+# PC1 34.9%  PC2 23.7%
+
+score = pca$x; class(score) # the score matrix, the data set projected on the principal components
+pca_cluster = as.data.frame(score[,1:3])
+pca_cluster$id = rep(cp_cleaned[,1],4)
+pca_cluster = tibble::rownames_to_column(pca_cluster, "id") 
+pca_plot = left_join(pca_cluster, dbt_cleaned, by = "id") %>% select(id, Status, PC1, PC2)
+
+### k_means
+## using PCA data
+fviz_nbclust(data_pca, FUNcluster = kmeans, method = "silhouette")
+km_2 <- kmeans(data_pca, centers = 2)
+
+## try ploting
+fviz_cluster(list(data = data_pca, cluster = km_2$cluster),
+             ellipse.type = "convex",
+             geom = c("point", "text"),
+             labelsize = 5,
+             palette = "Dark2") 
+
+# ggplot(pca_cluster, aes(x = PC1, y = PC2)) + geom_point()
+pca_plot %>%
+  # filter(Status != "Control") %>%
+  ggplot(aes(x = PC1, y = PC2)) + geom_point(aes(color = Status), alpha = 0.5) + labs(y= "PC2 (23.7%)", x = "PC1 (34.9%)")
+
+```
+
+#### pre
+```{r}
+data_pca = scale(pre_cleaned[,3:8]);dim(data_pca);length(pre_cleaned[,1])
+rownames(data_pca) <- pre_cleaned[,1]
+
+### PCA
+## Performing PCA and select component
+pca = prcomp(data_pca)
+vars <- apply(pca$x, 2, var)  
+props <- vars / sum(vars)
+cumsum(props) # first 3 components up to around 82% variance
+fviz_eig(pca, addlabels = T) 
+# PC1 40.4%  PC2 25.1%
+
+score = pca$x; class(score) # the score matrix, the data set projected on the principal components
+pca_cluster = as.data.frame(score[,1:3])
+pca_cluster = tibble::rownames_to_column(pca_cluster, "id") 
+pca_plot = left_join(pca_cluster, pre_cleaned, by = "id") %>% select(id, Status, PC1, PC2)
+
+### k_means
+## using PCA data
+fviz_nbclust(data_pca, FUNcluster = kmeans, method = "silhouette")
+km_2 <- kmeans(data_pca, centers = 2)
+
+## try ploting
+fviz_cluster(list(data = data_pca, cluster = km_2$cluster),
+             ellipse.type = "convex",
+             geom = c("point", "text"),
+             labelsize = 5,
+             palette = "Dark2") 
+
+# ggplot(pca_cluster, aes(x = PC1, y = PC2)) + geom_point()
+ggplot(pca_plot, aes(x = PC1, y = PC2)) + geom_point(aes(color = Status), alpha = 0.5) + labs(y= "PC2 (25.1%)", x = "PC1 (40.4%)")
+
+```
+
+
+#### task
+```{r}
+data_pca = scale(task_cleaned[,3:8]);dim(data_pca);length(task_cleaned[,1])
+rownames(data_pca) <- task_cleaned[,1]
+
+### PCA
+## Performing PCA and select component
+pca = prcomp(data_pca)
+vars <- apply(pca$x, 2, var)  
+props <- vars / sum(vars)
+cumsum(props) # first 3 components up to around 76% variance
+fviz_eig(pca, addlabels = T) 
+# PC1 37.5%  PC2 22.2%
+
+score = pca$x; class(score) # the score matrix, the data set projected on the principal components
+pca_cluster = as.data.frame(score[,1:3])
+pca_cluster = tibble::rownames_to_column(pca_cluster, "id") 
+pca_plot = left_join(pca_cluster, task_cleaned, by = "id") %>% select(id, Status, PC1, PC2)
+
+### k_means
+## using PCA data
+fviz_nbclust(data_pca, FUNcluster = kmeans, method = "silhouette")
+km_2 <- kmeans(data_pca, centers = 2)
+
+## try ploting
+fviz_cluster(list(data = data_pca, cluster = km_2$cluster),
+             ellipse.type = "convex",
+             geom = c("point", "text"),
+             labelsize = 5,
+             palette = "Dark2") 
+
+# ggplot(pca_cluster, aes(x = PC1, y = PC2)) + geom_point()
+ggplot(pca_plot, aes(x = PC1, y = PC2)) + geom_point(aes(color = Status), alpha = 0.5) + labs(y= "PC2 (22.2%)", x = "PC1 (37.5%)")
+
+```
+
+#### post
+```{r}
+data_pca = scale(post_cleaned[,3:8]);dim(data_pca);length(post_cleaned[,1])
+rownames(data_pca) <- post_cleaned[,1]
+
+### PCA
+## Performing PCA and select component
+pca = prcomp(data_pca)
+vars <- apply(pca$x, 2, var)  
+props <- vars / sum(vars)
+cumsum(props) # first 3 components up to around 82% variance
+fviz_eig(pca, addlabels = T) 
+# PC1 41.4%  PC2 25.6%
+
+score = pca$x; class(score) # the score matrix, the data set projected on the principal components
+pca_cluster = as.data.frame(score[,1:3])
+pca_cluster = tibble::rownames_to_column(pca_cluster, "id") 
+pca_plot = left_join(pca_cluster, post_cleaned, by = "id") %>% select(id, Status, PC1, PC2)
+
+### k_means
+## using PCA data
+fviz_nbclust(data_pca, FUNcluster = kmeans, method = "silhouette")
+km_2 <- kmeans(data_pca, centers = 2)
+
+## try ploting
+fviz_cluster(list(data = data_pca, cluster = km_2$cluster),
+             ellipse.type = "convex",
+             geom = c("point", "text"),
+             labelsize = 5,
+             palette = "Dark2") 
+
+# ggplot(pca_cluster, aes(x = PC1, y = PC2)) + geom_point()
+ggplot(pca_plot, aes(x = PC1, y = PC2)) + geom_point(aes(color = Status), alpha = 0.5) + labs(y= "PC2 (25.6%)", x = "PC1 (41.4%)")
+
+```
+
+
+### seperate by stage
+```{r}
+df_cleaned = bind_rows(cp_cleaned, dbt_cleaned, st_cleaned, sst_cleaned)
+data_pca = scale(df_cleaned[,3:8]);  dim(data_pca);length(df_cleaned[,1])
+rownames(data_pca) <- df_cleaned[,1]
+
+### PCA
+## Performing PCA and select component
+pca = prcomp(data_pca)
+vars <- apply(pca$x, 2, var)  
+props <- vars / sum(vars)
+cumsum(props) # first 3 components up to around 75% variance
+
+fviz_eig(pca, addlabels = T) 
+# PC1 34.9%  PC2 23.7%
+
+score = pca$x; class(score) # the score matrix, the data set projected on the principal components
+pca_cluster = as.data.frame(score[,1:3])
+pca_cluster$id = rep(cp_cleaned[,1],4)
+pca_cluster = tibble::rownames_to_column(pca_cluster, "id") 
+pca_plot = left_join(pca_cluster, dbt_cleaned, by = "id") %>%
+  mutate(stage = c(rep("CP", 45), rep("DBT", 45), rep("ST", 45), rep("SST", 45)))
+
+### k_means
+## using PCA data
+fviz_nbclust(data_pca, FUNcluster = kmeans, method = "silhouette")
+km_2 <- kmeans(data_pca, centers = 2)
+
+## try ploting
+fviz_cluster(list(data = data_pca, cluster = km_2$cluster),
+             ellipse.type = "convex",
+             geom = c("point", "text"),
+             labelsize = 5,
+             palette = "Dark2") 
+
+
+# ggplot(pca_cluster, aes(x = PC1, y = PC2)) + geom_point()
+
+pca_plot %>% 
+  filter(stage == "SST" | stage == "ST") %>%
+  ggplot(aes(x = PC1, y = PC2)) + 
+  geom_point(aes(color = stage)) + labs(y= "PC2", x = "PC1")
+ggsave("pca_sst_st.pdf")
+
+
+unique(pca_plot$stage)
+unique(data$stage)
+
+a = get_pca_var(pca)
+a$contrib
+
+fviz_contrib(pca, choice = "var", axes = 1, top = 10)
+
+pca_plot %>% 
+  ggplot(aes(x = PC1, y = PC2)) + 
+  geom_point(aes(color = stage)) + labs(y= "PC2", x = "PC1")
+
+```
+
+```{r}
+df_cleaned = bind_rows(base_cleaned, pre_cleaned, task_cleaned, post_cleaned)
+data_pca = scale(df_cleaned[,3:8]);dim(data_pca);length(df_cleaned[,1])
+rownames(data_pca) <- df_cleaned[,1]
+
+### PCA
+## Performing PCA and select component
+pca = prcomp(data_pca)
+vars <- apply(pca$x, 2, var)  
+props <- vars / sum(vars)
+cumsum(props) # first 3 components up to around 75% variance
+
+fviz_eig(pca, addlabels = T) 
+# PC1 34.9%  PC2 23.7%
+
+score = pca$x; class(score) # the score matrix, the data set projected on the principal components
+pca_cluster = as.data.frame(score[,1:3])
+pca_cluster$id = rep(base_cleaned[,1],4)
+
+pca_cluster = tibble::rownames_to_column(pca_cluster, "id") 
+pca_plot = left_join(pca_cluster, base_cleaned, by = "id") %>%
+  mutate(stage = c(rep("base", 45), rep("pre", 45), rep("task", 45), rep("post", 45)))
+
+### k_means
+## using PCA data
+fviz_nbclust(data_pca, FUNcluster = kmeans, method = "silhouette")
+km_2 <- kmeans(data_pca, centers = 2)
+
+## try ploting
+fviz_cluster(list(data = data_pca, cluster = km_2$cluster),
+             ellipse.type = "convex",
+             geom = c("point", "text"),
+             labelsize = 5,
+             palette = "Dark2") 
+
+
+# ggplot(pca_cluster, aes(x = PC1, y = PC2)) + geom_point()
+pca_plot %>% 
+  filter(stage == "task" | stage == "post") %>%
+  ggplot(aes(x = PC1, y = PC2)) + 
+  geom_point(aes(color = stage)) + labs(y= "PC2", x = "PC1")
+ggsave("pca_task_post.pdf")
+
+unique(pca_plot$stage)
+unique(data$stage)
+
+a = get_pca_var(pca)
+contrb = a$contrib
+
+fviz_contrib(pca, choice = "var", axes = 1, top = 10)
+
+```
+
+```{r}
+data = rbind(p1_cleaned, p2_cleaned, p3_cleaned, p4_cleaned, p5_cleaned, p6_cleaned, p7_cleaned, p8_cleaned, p9_cleaned, p10_cleaned, p11_cleaned, p12_cleaned)
+
+data_pca = scale(data[,3:8]);dim(data_pca);length(data[,1])
+# rownames(data_pca) <- data[,1]
+unique(data$stage)
+
+### PCA
+## Performing PCA and select component
+pca = prcomp(data_pca)
+vars <- apply(pca$x, 2, var)  
+props <- vars / sum(vars)
+cumsum(props) # first 3 components up to around 82% variance
+fviz_eig(pca, addlabels = T) 
+# PC1 41.4%  PC2 25.6%
+
+score = pca$x; class(score) # the score matrix, the data set projected on the principal components
+pca_cluster = as.data.frame(score[,1:3])
+pca_plot = pca_cluster %>% mutate(stage = data$stage)
+
+unique(pca_plot$stage)
+
+### k_means
+## using PCA data
+fviz_nbclust(data_pca, FUNcluster = kmeans, method = "silhouette")
+km_2 <- kmeans(data_pca, centers = 2)
+
+## try ploting
+fviz_cluster(list(data = data[3:8], cluster = km_2$cluster),
+             ellipse.type = "convex",
+             geom = c("point", "text"),
+             labelsize = 5,
+             palette = "Dark2") 
+
+ggplot(pca_cluster, aes(x = PC1, y = PC2)) + geom_point()
+pca_plot %>% filter(stage == "p8" | stage == "p9") %>%
+  ggplot(aes(x = PC1, y = PC2)) + 
+  geom_point(aes(color = stage), alpha = 0.5) + labs(y= "PC2", x = "PC1")
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+

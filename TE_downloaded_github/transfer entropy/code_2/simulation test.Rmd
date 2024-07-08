@@ -1,0 +1,136 @@
+---
+title: "simulation test"
+output: html_document
+date: "2023-02-17"
+---
+
+## case 1
+* 10 individual time series (x and y)
+* no trend in x (random x)
+* y(t) = 2x(t-1) + noise
+* different length of time series
+
+```{r}
+## 250 samples
+df_250 <- data.frame (id  = c(rep(1:20,250)), x = NA, y = NA) %>% arrange(id)
+
+for (j in 1:20) {
+n1 <- 250; x1 <- rnorm(n1+1, mean = 10, sd = 2); y1 <- rep(0, n1 + 1)
+
+for (i in 2:(n1 + 1)) {
+  y1[i] <- (2*x1[i - 1]) + rnorm(1, 0, 2)
+}
+x1 <- x1[-1]; y1 <- y1[-1]
+df_250$x[(1+250*(j-1)):(250*j)] = x1; df_250$y[(1+250*(j-1)):(250*j)] = y1
+}
+
+## 1000 samples
+df_1000 <- data.frame (id  = c(rep(1:20, 1000)), x = NA, y = NA) %>% arrange(id)
+
+for (j in 1:20) {
+n1 <- 1000; x1 <- rnorm(n1+1, mean = 10, sd = 2); y1 <- rep(0, n1 + 1)
+
+for (i in 2:(n1 + 1)) {
+  y1[i] <- (2*x1[i - 1]) + rnorm(1, 0, 2)
+}
+x1 <- x1[-1]; y1 <- y1[-1]
+df_1000$x[(1+1000*(j-1)):(1000*j)] = x1; df_1000$y[(1+1000*(j-1)):(1000*j)] = y1
+}
+
+
+### 2500 samples
+df_2500 <- data.frame (id  = c(rep(1:20, 2500)), x = NA, y = NA) %>% arrange(id)
+
+for (j in 1:20) {
+n1 <- 2500; x1 <- rnorm(n1+1, mean = 10, sd = 2); y1 <- rep(0, n1 + 1)
+
+for (i in 2:(n1 + 1)) {
+  y1[i] <- (2*x1[i - 1]) + rnorm(1, 0, 2)
+}
+x1 <- x1[-1]; y1 <- y1[-1]
+df_2500$x[(1+2500*(j-1)):(2500*j)] = x1; df_2500$y[(1+2500*(j-1)):(2500*j)] = y1
+}
+
+
+
+ts.plot((df_250 %>% filter(id == 1))$x)
+ts.plot((df_250 %>% filter(id == 1))$y)
+```
+
+
+## using lag difference
+```{r}
+df_te <- data.frame (id  = c(1:20), te1_xy = NA, te1_yx = NA, 
+                     te2_xy = NA, te2_yx = NA, te3_xy = NA, te3_yx = NA)
+
+for (i in 1:20) {
+  x1 = df_250$x[(1+250*(i-1)):(250*i)]; y1 = df_250$y[(1+250*(i-1)):(250*i)]
+  x2 = df_1000$x[(1+1000*(i-1)):(1000*i)]; y2 = df_1000$y[(1+1000*(i-1)):(1000*i)]
+  x3 = df_2500$x[(1+2500*(i-1)):(2500*i)]; y3 = df_2500$y[(1+2500*(i-1)):(2500*i)]
+  
+  te1 = transfer_entropy((x1-lag(x1))[-1], (y1-lag(y1))[-1])
+  te2 = transfer_entropy((x2-lag(x2))[-1], (y2-lag(y2))[-1])
+  te3 = transfer_entropy((x3-lag(x3))[-1], (y3-lag(y3))[-1])
+  
+  df_te$te1_xy[i] = te1$coef[1,1]; df_te$te1_yx[i] = te1$coef[2,1]
+  df_te$te2_xy[i] = te2$coef[1,1]; df_te$te2_yx[i] = te2$coef[2,1]
+  df_te$te3_xy[i] = te3$coef[1,1]; df_te$te3_yx[i] = te3$coef[2,1]
+  
+}
+
+```
+
+```{r}
+p = df_te %>% 
+  pivot_longer(te1_xy:te3_yx, names_to = "name", values_to = "te_value") %>%
+  ggplot(aes(x = name, y = te_value)) + 
+  geom_boxplot(aes(fill = name), color = "blue", alpha = .5) + 
+  theme(legend.position = "none") + xlab("control") 
+
+p + geom_jitter(shape=16, position=position_jitter(0.2))
+```
+
+
+## using original data
+
+```{r}
+df_te_2 <- data.frame (id  = c(1:20), te1_xy = NA, te1_yx = NA, 
+                     te2_xy = NA, te2_yx = NA, te3_xy = NA, te3_yx = NA)
+i = 1
+for (i in 1:20) {
+  x1 = df_250$x[(1+250*(i-1)):(250*i)]; y1 = df_250$y[(1+250*(i-1)):(250*i)]
+  x2 = df_1000$x[(1+1000*(i-1)):(1000*i)]; y2 = df_1000$y[(1+1000*(i-1)):(1000*i)]
+  x3 = df_2500$x[(1+2500*(i-1)):(2500*i)]; y3 = df_2500$y[(1+2500*(i-1)):(2500*i)]
+  
+  te1 = transfer_entropy(scale(despike(x1)), scale(despike(y1)))
+  te2 = transfer_entropy(scale(despike(x2)), scale(despike(y2)))
+  te3 = transfer_entropy(scale(despike(x3)), scale(despike(y3)))
+  
+  df_te_2$te1_xy[i] = te1$coef[1,1]; df_te_2$te1_yx[i] = te1$coef[2,1]
+  df_te_2$te2_xy[i] = te2$coef[1,1]; df_te_2$te2_yx[i] = te2$coef[2,1]
+  df_te_2$te3_xy[i] = te3$coef[1,1]; df_te_2$te3_yx[i] = te3$coef[2,1]
+  
+}
+
+```
+
+```{r}
+p_2 = df_te_2 %>% 
+  pivot_longer(te1_xy:te3_yx, names_to = "name", values_to = "te_value") %>%
+  ggplot(aes(x = name, y = te_value)) + 
+  geom_boxplot(aes(fill = name), color = "blue", alpha = .5) + 
+  theme(legend.position = "none") + xlab("control") 
+
+p_2 + geom_jitter(shape=16, position=position_jitter(0.2))
+```
+
+
+
+
+
+
+
+
+
+
+

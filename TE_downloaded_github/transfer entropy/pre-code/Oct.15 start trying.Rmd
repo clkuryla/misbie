@@ -1,0 +1,182 @@
+---
+title: "Oct.15 starting trying"
+output: html_document
+date: "2022-10-16"
+---
+```{r}
+library(tidyverse)
+library(pracma)
+library(ggplot2)
+library(egg)
+library(gridExtra)
+```
+
+## heart rate
+
+```{r}
+load("hr_cleaned.RData")
+hr_df = hr_cleaned
+```
+
+
+#### check the first stage - base
+```{r}
+hr_1 = hr_df %>% filter(period == 1) %>%
+  group_by(id) %>%
+  mutate(diff = rate - lag(rate)) 
+
+ggplot(hr_1, aes(x = time, y = rate, group = id)) + 
+  geom_smooth(se = FALSE, size = 0.2) # rate plot
+ggplot(hr_1, aes(x = time, y = diff, group = id)) + 
+  geom_smooth(se = FALSE, size = 0.2) # diff plot
+
+## kernel density of heart rate and the diff
+par(mfrow=c(1,2))
+a <- rnorm(200, mean = 72, sd = 12)   
+plot(density(hr_1$rate, na.rm = T))
+lines(density(a), col = "red")  
+
+b <- rnorm(200, mean = 0, sd = 2.2)   
+plot(density(hr_1$diff, na.rm = T))
+lines(density(b), col = "red") # heavy tail??
+
+```
+
+
+#### check the fifth stage - pre-task
+```{r}
+hr_5 = hr_df %>% filter(period == 5) %>%
+  group_by(id) %>%
+  mutate(diff = rate - lag(rate)) 
+
+ggplot(hr_5, aes(x = time, y = rate, group = id)) + 
+  geom_smooth(se = FALSE, size = 0.2) # rate plot
+ggplot(hr_5, aes(x = time, y = diff, group = id)) + 
+  geom_smooth(se = FALSE, size = 0.2) # diff plot
+
+## kernel density of heart rate and the diff
+par(mfrow=c(1,2))
+a <- rnorm(100000, mean = 72, sd = 12)   
+plot(density(hr_1$rate, na.rm = T))
+lines(density(a), col = "red") 
+
+b <- rnorm(100000, mean = 0, sd = 2.2)   
+plot(density(hr_1$diff, na.rm = T))
+lines(density(b), col = "red") # heavy tail?
+```
+
+
+### trying functions from time series
+
+```{r}
+mi020 = hr_df %>% filter(id == "mi020")
+mi020_hr = ts(as.data.frame(mi020$rate))
+mi023 = hr_df %>% filter(id == "mi023")
+mi023_hr = ts(as.data.frame(mi023$rate))
+
+a = autoplot(mi023_hr)
+b = autoplot(mi020_hr)
+grid.arrange(a,b, nrow = 2)
+
+```
+
+
+
+
+## respiratory
+
+```{r}
+load("rsp_cleaned.RData")
+rsp_df = rsp_cleaned
+```
+
+
+#### check the first stage - base
+```{r}
+rsp_1 = rsp_df %>% filter(period == 1) %>%
+  group_by(id) %>%
+  mutate(diff = rate - lag(rate)) %>%
+  filter(id != "mi057") 
+# filter out mi057 for abnormal much more measurements than others
+
+ggplot(rsp_1, aes(x = time, y = rate, group = id)) + 
+  geom_smooth(se = FALSE, size = 0.2) # rate plot
+
+ggplot(rsp_1, aes(x = time, y = diff, group = id)) + 
+  geom_smooth(se = FALSE, size = 0.2) # diff plot
+
+## kernel density of heart rate and the diff
+par(mfrow=c(1,2))
+a <- rnorm(200000, mean = 17.5, sd = 3.5)   
+plot(density(rsp_1$rate, na.rm = T))
+lines(density(a), col = "red")  
+
+b <- rnorm(200000, mean = 0, sd = 2)   
+plot(density(rsp_1$diff, na.rm = T))
+lines(density(b), col = "red") # heavy tail??
+
+```
+
+
+#### check the fifth stage - pre-task
+```{r}
+rsp_5 = rsp_df %>% filter(period == 5) %>%
+  group_by(id) %>%
+  mutate(diff = rate - lag(rate)) %>%
+  filter(id != "mi057") 
+# filter out mi057 for abnormal much more measurements than others
+
+ggplot(rsp_5, aes(x = time, y = rate, group = id)) + 
+  geom_smooth(se = FALSE, size = 0.2) # rate plot
+
+ggplot(rsp_5, aes(x = time, y = diff, group = id)) + 
+  geom_smooth(se = FALSE, size = 0.2) # diff plot
+
+## kernel density of heart rate and the diff
+par(mfrow=c(1,2))
+a <- rnorm(200000, mean = 17.5, sd = 3.5)   
+plot(density(rsp_1$rate, na.rm = T))
+lines(density(a), col = "red")  
+
+b <- rnorm(200000, mean = 0, sd = 2)   
+plot(density(rsp_1$diff, na.rm = T))
+lines(density(b), col = "red") # heavy tail??
+
+```
+
+
+#### trying functions for time serise
+
+```{r}
+mi020 = rsp_df %>% filter(id == "mi020")
+mi020_rsp = ts(as.data.frame(mi020$rate))
+mi023 = rsp_df %>% filter(id == "mi023")
+mi023_rsp = ts(as.data.frame(mi023$rate))
+
+a = autoplot(mi023_rsp)
+b = autoplot(mi020_rsp)
+grid.arrange(a,b, nrow = 2)
+
+
+```
+
+
+
+
+## problems
+* no patient condition for mi045 to mi072
+
+* time window: every 5 seconds per value.
+
+* paramertric likelihood assumption (condition probability)
+
+* auto-regression model (m-lags, num of lag sufficient) - ar1, ar2, ar3, ar4 
+
+
+
+
+
+```{r}
+-2.5 + 1.96 * 1.15
+```
+

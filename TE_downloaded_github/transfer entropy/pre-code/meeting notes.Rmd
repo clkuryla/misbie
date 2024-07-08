@@ -1,0 +1,48 @@
+---
+title: "meeting notes"
+output: html_document
+date: "2022-10-16"
+---
+
+## Oct. 6
+
+* De-trend the data within each stage and check the stationarity and distributions of residues. We may want to compare the distribution with Gaussian and check if there are heavy tails in the distribution. 
+
+* Get the six transfer entropy values for directed pairs among three biomarkers.
+
+## Nov 2
+
+* cluster 3-dimentional PCA clustering
+
+* should use residue for information transfer
+
+* unsupervised (PCA, clustering), and supervised (RF, regression)
+
+## Nov 18
+
+* PCA to 3-dimension (tenser-dicomposition)
+
+* correlation - for individual across: a to f, periods
+* patient condition separation
+* different time intervals for each of a-f
+* try different lags with smaller time intervals (*****)
+* TE ~ period + disease status + random effect (individual) 
+* detrend problem - vary the smoothing parameter (linear or x^2) (less detrend)
+* try 0 lag 
+ 
+* 3 total signals: heart rate, blood pressure, and respiratory rate
+* Working with the detrended signals and looking at 5 second intervals, although many of the residuals of these signals in this interval size are not significantly related to the other signals - not a case of lagged dependencies, rather they are concurrent
+* Next step: Performing a sanity check to assure computation process (maybe using SBP and DBP association as an example?)
+* Experimenting with changes in window sizes (1 second window sizes were mentioned)
+
+## RA
+
+* 10~20 hours a week (21.5 dollar per hour)
+* interval
+* Markov order (lx, ly) (munipulate order)
+* delay (time series shipping)
+
+
+
+
+

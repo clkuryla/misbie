@@ -1,0 +1,132 @@
+---
+title: "Feb.26"
+author: "sze pui"
+date: "2/26/2023"
+output: html_document
+---
+
+
+```{r}
+library(tidyverse)
+```
+
+
+
+```{r load dataset}
+trans_res_post_13 = read.csv(file = "/Users/yangtianrun/Desktop/Pei group/Yan_2023/Load_data/trans_res_post_13.csv") %>% 
+  select(-num_obs,-X) %>% 
+  rename(a_Mutation = a, 
+         b_Mutation = b, 
+         c_Mutation = c, 
+         d_Mutation = d, 
+         e_Mutation = e, 
+         f_Mutation = f)
+
+trans_res_post_2 =read.csv(file = "/Users/yangtianrun/Desktop/Pei group/Yan_2023/Load_data/trans_res_post_2.csv")%>% 
+  select(-num_obs, -X) %>% 
+  rename(a_Deletion = a, 
+         b_Deletion = b, 
+         c_Deletion  = c, 
+         d_Deletion  = d, 
+         e_Deletion  = e, 
+         f_Deletion  = f)
+
+trans_res_post_control = read.csv(file = "/Users/yangtianrun/Desktop/Pei group/Yan_2023/Load_data/trans_res_control.csv")%>% 
+  select(-num_obs,-X) %>% 
+  rename(a_Control = a, 
+         b_Control = b, 
+         c_Control  = c, 
+         d_Control  = d, 
+         e_Control  = e, 
+         f_Control = f)
+
+ overview = full_join(trans_res_post_13, trans_res_post_2, by= "id")
+ overview = full_join(overview, trans_res_post_control, by = "id")
+```
+
+
+```{r Transformation}
+# Turning the dataset from wide to long
+
+overview= overview%>% 
+  pivot_longer(
+    cols= c(a_Mutation:f_Control), 
+    names_to = c("Direction","Status"), 
+    values_to = "TE_value", 
+    names_sep = "_"
+  ) %>% 
+  drop_na(TE_value) %>% 
+    mutate(Type = 
+             case_when(Direction== 'a' | Direction== 'b' ~ 'Hr<>Bp',
+                       Direction == 'c' | Direction == 'd' ~'Hr<>Rsp',
+                       Direction == 'e' | Direction == 'f' ~ 'Bp<>Rsp')) %>% 
+  mutate(Direction = 
+             case_when(Direction== 'a' ~ 'Hr_to_Bp',
+                       Direction== 'b' ~ 'Bp_to_Hr',
+                       Direction == 'c' ~'Hr_to_Rsp',
+                        Direction == "d" ~"Rsp_to_Hr",
+                       Direction == 'e' ~ 'Bp_to_Rsp', 
+                         Direction == 'f' ~ 'Rsp_to_Bp'))
+
+```
+
+## 3*3 plot
+```{r Mutation}
+overview  %>%
+  ggplot(aes(x = Direction , y = TE_value)) + 
+  geom_boxplot(aes(fill = Direction), color = "blue", alpha = .5)+ 
+  theme(legend.position = "none")+
+  facet_grid(Status ~ Type, scales = "free_x")
+
+```
+
+##  paired-sample: Wilcoxon Signed Rank Test
+```{r}
+#Group Hr<>Bp
+## Group Hr<>Bp, Mutation
+hr_bp_mutation = overview  %>% 
+  filter(Type == "Hr<>Bp", Status == "Mutation")
+
+## Group Hr<>Bp, Deletion
+hr_bp_deletion = overview  %>% 
+  filter(Type == "Hr<>Bp", Status == "Deletion")
+
+## Group Hr<>Bp,Control
+hr_bp_control = overview  %>% 
+  filter(Type == "Hr<>Bp", Status == "Control")
+
+
+wilcox.test(TE_value ~ Direction, data =hr_bp_mutation , paired = TRUE) # p-val 0.7344
+wilcox.test(TE_value ~ Direction, data =hr_bp_deletion , paired = TRUE) # p-val 0.3125
+wilcox.test(TE_value ~ Direction, data =hr_bp_control , paired = TRUE) # p-val 0.5153
+
+#Group Bp<>Rsp 
+## Group Bp<>Rsp, Mutation 
+bp_rsp_mutation = overview  %>% 
+  filter(Type == "Bp<>Rsp", Status == "Mutation" ) 
+## Group Bp<>Rsp,Deletion
+bp_rsp_deletion = overview  %>% 
+  filter(Type == "Bp<>Rsp", Status == "Deletion" )
+## Group Bp<>Rsp,Control
+bp_rsp_control = overview  %>% 
+  filter(Type == "Bp<>Rsp", Status == "Control" )
+
+wilcox.test(TE_value ~ Direction, data =bp_rsp_mutation , paired = TRUE) #0.6523
+wilcox.test(TE_value ~ Direction, data =bp_rsp_deletion , paired = TRUE) #0.3828
+wilcox.test(TE_value ~ Direction, data =bp_rsp_control , paired = TRUE) #0.1956
+
+# Group	Hr<>Rsp 
+## Group	Hr<>Rsp, Mutation
+hr_rsp_mutation = overview  %>% filter(Type == "Hr<>Rsp",Status == "Mutation" ) 
+## Group	Hr<>Rsp, Mutation
+hr_rsp_deletion = overview  %>% 
+filter(Type == "Hr<>Rsp",Status == "Deletion" ) 
+## Group	Hr<>Rsp, Control
+hr_rsp_control = overview  %>% filter(Type == "Hr<>Rsp",Status == "Control" ) 
+
+wilcox.test(TE_value ~ Direction, data =hr_rsp_mutation , paired = TRUE) #0.3954 
+wilcox.test(TE_value ~ Direction, data =hr_rsp_deletion , paired = TRUE) #0.4609
+wilcox.test(TE_value ~ Direction, data =hr_rsp_control, paired = TRUE) #0.1564 
+
+```
+

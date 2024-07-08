@@ -1,0 +1,202 @@
+---
+title: "data cleaning"
+output: html_document
+date: "2022-09-21"
+---
+
+```{r}
+library(tidyverse)
+library(fs)
+library(ggplot2)
+library(plotly)
+library(readxl)
+```
+
+## rsp (Respiration) data cleaning
+### combination
+```{r}
+raw.files <- data_frame(filename = list.files('raw_data_rsp'))
+raw.file.paths <- raw.files  %>%
+  mutate(filepath = paste0("raw_data_rsp/", filename))
+
+raw.data <- raw.file.paths %>%
+  # 'do' the function for each row in turn
+  rowwise() %>%
+  do(., read_csv(file=.$filepath))
+
+read.csv.and.add.filename <- function(filepath){
+  read_csv(filepath) %>%
+    mutate(filepath=filepath)
+}
+
+raw.data.with.paths <- raw.file.paths %>%
+  rowwise() %>%
+  do(., read.csv.and.add.filename(.$filepath))
+
+a = raw.data.with.paths %>% separate(filepath, c("a", "b"), sep = "_") %>% select(-b) %>%
+  separate(a, c("a", "b")) %>% select(-a) %>%
+  separate(b, c("id", "period"), sep = 5, remove = FALSE) %>% select(-b)
+
+write_csv(data, "rsp_data.csv")
+```
+
+### data cleaning
+```{r}
+data_rsp = read_csv("rsp_data_combine.csv")
+condition = read_xlsx("conditions.xlsx") %>% mutate(id = tolower(id))
+
+## calculate rate and middle time point
+data_rsp_1 = data_rsp %>% group_by(id, period) %>%
+  mutate(diff = pSec - lag(pSec)) %>%
+  mutate(sum_t2 = pSec + lag(pSec))
+
+data_rsp_2 = data_rsp_1 %>%
+  mutate(rate = 60/diff) %>%
+  mutate(time = sum_t2/2) %>%
+  mutate(period = as.factor(period))
+
+## rename period levels
+data_rsp_2$period = 
+  recode(data_rsp_2$period, Base = "1", Pre = "2", Instruct = "3",
+         PrepTask = "4", Task = "5", Post5 = "6", Post10 = "7", 
+         Post20 = "8", Post30 = "9", Post60 = "10", Post90 = "11",
+         Post120 = "12")
+
+## add patient condition
+data_rsp_cleaned = left_join(data_rsp_2, condition, by = "id")
+rsp_cleaned = data_rsp_cleaned %>% select(-diff, -sum_t2)
+
+save(rsp_cleaned, file = "rsp_cleaned.RData")
+
+unique(rsp_cleaned$period)
+
+```
+
+
+## bp (blood pressure) data cleaning
+### combination
+```{r}
+raw.files <- data_frame(filename = list.files('raw_data_bp'))
+raw.file.paths <- raw.files  %>%
+  mutate(filepath = paste0("raw_data_bp/", filename))
+
+raw.data <- raw.file.paths %>%
+  # 'do' the function for each row in turn
+  rowwise() %>%
+  do(., read_csv(file=.$filepath))
+
+read.csv.and.add.filename <- function(filepath){
+  read_csv(filepath) %>%
+    mutate(filepath=filepath)
+}
+
+raw.data.with.paths <- raw.file.paths %>%
+  rowwise() %>%
+  do(., read.csv.and.add.filename(.$filepath))
+
+data = raw.data.with.paths %>% separate(filepath, c("a", "b"), sep = "/") %>% select(-a) %>%
+  separate(b, c("a", "b", sep = "_")) %>% select(-b) %>%
+  separate(a, c("id", "period"), sep = 5, remove = FALSE) %>% 
+  select(pSec, pVal, tSec, tVal, id, period)
+
+write_csv(data, "bp_data.csv")
+load("dp_bp.RData")
+dp_bp.data
+```
+
+### data cleaning
+
+```{r}
+data_bp = read_csv("bp_data_combine.csv")
+condition = read_xlsx("conditions.xlsx") %>% mutate(id = tolower(id))
+unique(data_bp$period)
+
+## rename period levels
+data_bp$period = 
+  recode(data_bp$period, Base = "1", Pre = "2", Instruct = "3",
+         PrepTask = "4", Task = "5", Post5 = "6", Post10 = "7", 
+         Post20 = "8", Post30 = "9", Post60 = "10", Post90 = "11",
+         Post120 = "12")
+
+## add patient condition
+bp_cleaned = left_join(data_bp, condition, by = "id")
+
+save(bp_cleaned, file = "bp_cleaned.RData")
+```
+
+##### issues
+* mi032, mi013 got problems with period NA, due to file name difference.
+
+
+
+
+## heart rate
+### combination
+```{r}
+raw.files <- data_frame(filename = list.files('raw_data_heart rate'))
+raw.file.paths <- raw.files  %>%
+  mutate(filepath = paste0("raw_data_heart rate/", filename))
+
+raw.data <- raw.file.paths %>%
+  # 'do' the function for each row in turn
+  rowwise() %>%
+  do(., read_csv(file=.$filepath))
+
+read.csv.and.add.filename <- function(filepath){
+  read_csv(filepath) %>%
+    mutate(filepath=filepath)
+}
+
+raw.data.with.paths <- raw.file.paths %>%
+  rowwise() %>%
+  do(., read.csv.and.add.filename(.$filepath))
+
+data = raw.data.with.paths %>% separate(filepath, c("a", "b"), sep = "/") %>% select(-a) %>%
+  separate(b, c("a", "b", sep = "_")) %>% select(-b) %>%
+  separate(a, c("id", "period"), sep = 5, remove = FALSE) %>% 
+  select(pSec, id, period)
+
+write_csv(data, "hr_data.csv")
+
+```
+
+### data cleaning
+```{r}
+data_hr = read_csv("hr_data_combine.csv")
+condition = read_xlsx("conditions.xlsx") %>% mutate(id = tolower(id))
+
+## calculate rate and middle time point
+data_hr_clean_1 = data_hr %>% group_by(id, period) %>%
+  mutate(diff = pSec - lag(pSec)) %>%
+  mutate(sum_t2 = pSec + lag(pSec))
+
+data_hr_cleaned_2 = data_hr_clean_1 %>%
+  mutate(rate = 60/diff) %>%
+  mutate(time = sum_t2/2) %>%
+  mutate(period = as.factor(period))
+
+## rename period levels
+data_hr_cleaned_2$period = 
+  recode(data_hr_cleaned_2$period, Base = "1", Pre = "2", Instruct = "3",
+         PrepTask = "4", Task = "5", Post5 = "6", Post10 = "7", 
+         Post20 = "8", Post30 = "9", Post60 = "10", Post90 = "11",
+         Post120 = "12")
+
+## add patient condition
+data_hr_cleaned = left_join(data_hr_cleaned_2, condition, by = "id")
+hr_cleaned = data_hr_cleaned %>% select(-diff, -sum_t2)
+
+save(hr_cleaned, file = "hr_cleaned.RData")
+```
+
+#### issues
+* mi013, mi014 got problems with period NA, due to file name difference.
+
+
+
+
+
+
+
+
+

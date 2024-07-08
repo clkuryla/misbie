@@ -1,0 +1,83 @@
+---
+title: "EDA"
+output:
+  pdf_document: default
+  html_document: default
+date: "2022-09-19"
+---
+```{r, echo=FALSE, message = FALSE, warning = FALSE}
+library(tidyverse)
+library(fs)
+library(ggplot2)
+library(plotly)
+library(readxl)
+```
+
+
+## heart rate
+```{r, echo=FALSE,  message = FALSE, warning = FALSE}
+load("hr_cleaned.RData")
+## filter the data for only the Speech Task
+task_hr = hr_cleaned %>%
+  filter(period %in% c("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12")) %>%
+  mutate(period = factor(period, levels = c("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12"))) %>%
+  filter(! is.na(condition))
+
+p = ggplot(comb_df, aes(x = interval, y = rate_mean, group = id, color = condition)) + 
+  geom_smooth(se = FALSE, size = 0.2) +
+  facet_wrap(~ period) 
+p2 = p + coord_cartesian(xlim = c(0, 650), ylim = c(50,150))
+
+ggplotly(p2, mode = "markers", color = ~state, colors = "Set1")
+```
+
+## Respiration
+
+```{r, echo=FALSE,message = FALSE, warning = FALSE}
+load("rsp_cleaned.RData")
+## filter the data for only the Speech Task
+task_rsp = rsp_cleaned %>%
+  filter(period %in% c("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12")) %>%
+  mutate(period = factor(period, levels = c("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12"))) %>%
+  filter(! is.na(condition))
+
+## get some try
+p = ggplot(task_rsp, aes(x = time, y = rate, group = id, color = condition)) + 
+  geom_smooth(se = FALSE, size = 0.2) +
+  facet_wrap(~ period) 
+p2 = p + coord_cartesian(xlim = c(0, 380), ylim = c(0,35))
+
+ggplotly(p2, mode = "markers", color = ~state, colors = "Set1")
+```
+
+## blood pressure
+
+```{r, echo=FALSE,  message = FALSE, warning = FALSE}
+load("bp_cleaned.RData")
+task_bp = bp_cleaned %>%
+  filter(period %in% c("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12")) %>%
+  mutate(period = factor(period, levels = c("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12"))) %>%
+  filter(! is.na(condition))
+
+## get some try
+p = ggplot(task_bp, aes(x = pSec, y = pVal, group = id, color = condition)) + 
+  geom_smooth(se = FALSE, size = 0.2) +
+  facet_wrap(~ period) 
+
+p2 = p + coord_cartesian(xlim = c(0, 300), ylim = c(30,200))
+ggplotly(p2, mode = "markers", color = ~state, colors = "Set1")
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+

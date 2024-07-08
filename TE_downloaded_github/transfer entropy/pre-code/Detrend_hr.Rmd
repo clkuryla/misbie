@@ -1,0 +1,301 @@
+---
+title: "Detrend_hr"
+author: "sze pui"
+date: "10/18/2022"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r load library, include=FALSE}
+library(lmtest)
+library(tidyverse)
+library(stats)
+library(dplyr)
+library(purrr)
+library(timetk)
+library(pracma)
+library(ggplot2)
+library(ggfortify)
+library(egg)
+library(gridExtra)
+library(aTSA)
+library(autoReg)
+```
+
+### 5 seconds mapping for hr and respiratory
+```{r laod data and data preprocessing}
+## heart rate
+load("hr_cleaned.RData")
+hr_df = hr_cleaned 
+hr_df = hr_df %>% ungroup()
+
+## map to 5 seconds intervals
+max(hr_df$time, na.rm = T)
+time_break = seq(0, 1242, 5)
+hr_df = hr_df %>% 
+  mutate(interval = cut(hr_df$time, breaks = time_break)) %>%
+  group_by(id, period, interval) %>%
+  mutate(rate_mean = mean(rate)) 
+
+
+# remain the distinct column of rate_mean
+hr_cleaned = hr_df %>%  
+  select(id, period, condition, interval, rate_mean) %>% distinct() %>%
+  group_by(id) %>%
+  mutate(diff = rate_mean - lag(rate_mean)) 
+
+## respiratory
+load("rsp_cleaned.RData")
+rsp_df = rsp_cleaned 
+rsp_df = rsp_df %>% ungroup()
+
+## map to 5 seconds intervals
+max(rsp_df$time, na.rm = T)
+time_break = seq(0, 1662, 5)
+rsp_df = rsp_df %>% 
+  mutate(interval = cut(rsp_df$time, breaks = time_break)) %>%
+  group_by(id, period, interval) %>%
+  mutate(rate_mean = mean(rate)) 
+
+# remain the distinct column of rate_mean
+rsp_cleaned = rsp_df %>%  
+  select(id, period, condition, interval, rate_mean) %>% distinct() %>%
+  group_by(id) %>%
+  mutate(diff = rate_mean - lag(rate_mean))
+
+```
+
+
+### trying for one patient mi020
+```{r}
+mi020_hr = hr_cleaned %>% filter(id == "mi020") %>% 
+  mutate(interval = as.numeric(interval)) 
+mi020_rsp = rsp_cleaned %>% filter(id == "mi020") %>% 
+  mutate(interval = as.numeric(interval))
+
+mi020 = left_join(mi020_rsp, mi020_hr, by = c("id", "period", "condition", "interval")) %>%
+  mutate(hr_rate = `rate_mean.y`, rsp_rate = `rate_mean.x`) %>%
+  select(id, period, interval, hr_rate, rsp_rate)
+```
+
+### looking at the trend
+```{r}
+mi020_1 = mi020 %>% filter(period == 1) %>% drop_na()
+mi020_hr = ts(as.data.frame(mi020_1$hr_rate))
+mi020_rsp = ts(as.data.frame(mi020_1$rsp_rate))
+
+ggplot(mi020_1, aes(x = interval, y = hr_rate)) +
+  geom_point(size = 0.2) +
+  geom_smooth(se = FALSE, size = 0.2) # rate plot
+ggplot(mi020_1, aes(x = interval, y = rsp_rate)) + 
+  geom_point(size = 0.2) +
+  geom_smooth(se = FALSE, size = 0.2) # rate plot
+
+a = autoplot(mi020_hr)
+b = autoplot(mi020_rsp)
+grid.arrange(a,b, nrow = 2)
+
+diff.ts = diff(mi020_hr)
+plot(diff.ts)
+```
+
+
+
+
+#### checking for period 1
+```{r}
+mi020_1 = mi020 %>% filter(period == 1) %>% drop_na()
+x = mi020_1$hr_rate
+y = mi020_1$rsp_rate
+theme_set(theme_light())
+# Lagged X-Plot
+p1 <- ggplot(data.frame(x = c(NA, x[1:(length(x) - 1)]), y = y), aes(x, y)) +
+  geom_smooth() +
+  geom_point(alpha = 0.5, size = 0.5) +
+  labs(x = expression(X[t - 1]), y = expression(Y[t])) +
+  coord_fixed(1) +
+  scale_x_continuous(limits = range(x)) +
+  scale_y_continuous(limits = range(y))
+# X-Y Plot
+p2 <- ggplot(data.frame(x = x, y = y), aes(x, y)) +
+  geom_smooth() +
+  geom_point(alpha = 0.5, size = 0.5) +
+  labs(x = expression(X[t]), y = expression(Y[t])) +
+  coord_fixed(1) +
+  scale_x_continuous(limits = range(x)) +
+  scale_y_continuous(limits = range(y))
+# Lagged Y Plot
+p3 <- ggplot(data.frame(x = x, y = c(NA, y[1:(length(y) - 1)])), aes(x, y)) +
+  geom_smooth() +
+  geom_point(alpha = 0.5, size = 0.5) +
+  labs(x = expression(X[t]), y = expression(Y[t - 1])) +
+  coord_fixed(1) +
+  scale_x_continuous(limits = range(x)) +
+  scale_y_continuous(limits = range(y))
+a <- grid.arrange(p1, p2, p3, ncol = 3)
+```
+
+
+#### checking for period 2
+```{r}
+mi020_2 = mi020 %>% filter(period == 2) %>% drop_na()
+x = mi020_2$hr_rate
+y = mi020_2$rsp_rate
+theme_set(theme_light())
+# Lagged X-Plot
+p1 <- ggplot(data.frame(x = c(NA, x[1:(length(x) - 1)]), y = y), aes(x, y)) +
+  geom_smooth() +
+  geom_point(alpha = 0.5, size = 0.5) +
+  labs(x = expression(X[t - 1]), y = expression(Y[t])) +
+  coord_fixed(1) +
+  scale_x_continuous(limits = range(x)) +
+  scale_y_continuous(limits = range(y))
+# X-Y Plot
+p2 <- ggplot(data.frame(x = x, y = y), aes(x, y)) +
+  geom_smooth() +
+  geom_point(alpha = 0.5, size = 0.5) +
+  labs(x = expression(X[t]), y = expression(Y[t])) +
+  coord_fixed(1) +
+  scale_x_continuous(limits = range(x)) +
+  scale_y_continuous(limits = range(y))
+# Lagged Y Plot
+p3 <- ggplot(data.frame(x = x, y = c(NA, y[1:(length(y) - 1)])), aes(x, y)) +
+  geom_smooth() +
+  geom_point(alpha = 0.5, size = 0.5) +
+  labs(x = expression(X[t]), y = expression(Y[t - 1])) +
+  coord_fixed(1) +
+  scale_x_continuous(limits = range(x)) +
+  scale_y_continuous(limits = range(y))
+a <- grid.arrange(p1, p2, p3, ncol = 3)
+```
+#### auto-regression
+
+```{r}
+# test for stationary
+x = mi020_1$hr_rate # heart rate
+y = mi020_1$rsp_rate
+adf.test(x) # augmented Dickey–Fuller test
+adf.test(y)
+
+par(mfcol=c(1,2))
+# the stationary signal and ACF
+plot(1:58, x,
+     type='l',col='red',
+     xlab = "time (t)",
+     ylab = "X(t)",
+     main = "signal")
+acf(x, lag.max = length(x),
+         xlab = "lag #", ylab = 'ACF',main=' ')
+
+ar(x)
+
+## using the residue
+fit_trend = loess(y ~ x) 
+plot(fit_trend$residuals)
+adf.test(x)
+## everything should be done on residue
+```
+
+### for trying
+```{r}
+hr_1 = hr_cleaned %>% filter(period == 1) %>%
+  group_by(id) %>%
+  mutate(diff = rate_mean - lag(rate_mean)) 
+
+ggplot(hr_1, aes(x = interval, y = rate_mean, group = id)) + 
+  geom_smooth(se = FALSE, size = 0.2) # rate plot
+
+mi020 = hr_cleaned %>% filter(id == "mi020")
+mi020_hr = ts(as.data.frame(mi020$rate_mean))
+mi023 = hr_cleaned %>% filter(id == "mi023")
+mi023_hr = ts(as.data.frame(mi023$rate_mean))
+
+a = autoplot(mi023_hr)
+b = autoplot(mi020_hr)
+grid.arrange(a,b, nrow = 2)
+
+```
+
+
+#### Compare the trend before and after detrend
+```{r}
+#the overall situation for period 1:6 before detrend
+hr_cleaned  %>% 
+  group_by(period) %>% 
+  filter(period == (1:6)) %>% 
+  plot_time_series(interval, rate_mean,  
+                   .interactive = F, .legend_show = F, 
+                   .facet_ncol = 2, 
+                   .title=" Data grouped by stage 1- 6")
+
+#the overall situation for period 1:6 after detrend
+hr_df_detrend  %>% 
+  group_by(period) %>% 
+  filter(period == (1:6)) %>% 
+  plot_time_series(pSec, diff,  
+                   .interactive = F, .legend_show = F, 
+                   .facet_ncol = 2, 
+                   .title="Detrended Data grouped by stage 1- 6")
+
+#the overall situation for period 7:12
+hr_df_detrend  %>% 
+  group_by(period) %>% 
+  filter(period == (7:12)) %>% 
+  plot_time_series(pSec, diff,  
+                   .interactive = F, .legend_show = F, 
+                   .facet_ncol = 2, 
+                   .title="Detrended Data grouped by stage 7-12")
+
+#look into the plot after detrend
+#stage1
+hr_df_detrend  %>% filter(period ==1) %>% select(rate,diff) %>% plot.ts(rate) 
+
+#stage2
+hr_df_detrend  %>% filter(period ==2) %>% select(rate,diff) %>% plot.ts(rate) 
+
+#stage3 
+hr_df_detrend  %>% filter(period ==3) %>% select(rate,diff) %>% plot.ts(rate) 
+
+#stage4
+hr_df_detrend %>% filter(period ==4) %>% select(rate,diff) %>% plot.ts(rate) 
+
+#stage5
+hr_df_detrend  %>% filter(period ==5) %>% select(rate,diff) %>% plot.ts(rate) 
+
+#stage6
+hr_df_detrend  %>% filter(period ==6) %>% select(rate,diff) %>% plot.ts(rate) 
+
+#stage7
+hr_df_detrend  %>% filter(period ==7) %>% select(rate,diff) %>% plot.ts(rate)
+
+#stage8
+hr_df_detrend  %>% filter(period ==8) %>% select(rate,diff) %>% plot.ts(rate) 
+
+#stage9
+hr_df_detrend  %>% filter(period ==9) %>% select(rate,diff) %>% plot.ts(rate) 
+
+#stage10
+hr_df_detrend  %>% filter(period ==10) %>% select(rate,diff) %>% plot.ts(rate) 
+
+#stage11
+hr_df_detrend  %>% filter(period ==11) %>% select(rate,diff) %>% plot.ts(rate) 
+
+#stage12
+hr_df_detrend  %>% filter(period ==12) %>% select(rate,diff) %>% plot.ts(rate) 
+
+#CP 
+hr_df_detrend  %>% filter(period == "CP") %>% select(rate,diff) %>% plot.ts(rate) 
+
+#DBT 
+hr_df_detrend  %>% filter(period =="DBT") %>% select(rate,diff) %>% plot.ts(rate) 
+
+#ST 
+hr_df_detrend  %>% filter(period =="ST") %>% select(rate,diff) %>% plot.ts(rate) 
+
+#SST
+hr_df_detrend  %>% filter(period =="SST") %>% select(rate,diff) %>% plot.ts(rate) 
+```
+
+
+

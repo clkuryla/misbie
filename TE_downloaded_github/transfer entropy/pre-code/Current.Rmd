@@ -1,0 +1,256 @@
+---
+title: "Current"
+output: html_document
+date: "2022-11-11"
+---
+
+```{r load library, include=FALSE}
+library(lmtest)
+library(tidyverse)
+library(stats)
+library(dplyr)
+library(purrr)
+library(timetk)
+library(pracma)
+library(ggplot2)
+library(ggfortify)
+library(egg)
+library(gridExtra)
+library(aTSA)
+library(autoReg)
+library(RTransferEntropy)
+options(warn=-1)
+library(tseries)
+```
+
+### 5 seconds mapping for hr and respiratory
+```{r laod data and data preprocessing}
+## heart rate
+load("hr_cleaned.RData")
+hr_df = hr_cleaned 
+hr_df = hr_df %>% ungroup()
+
+## map to 5 seconds intervals
+max(hr_df$time, na.rm = T)
+time_break = seq(0, 1242, 2)
+hr_df = hr_df %>% 
+  mutate(interval = cut(hr_df$time, breaks = time_break)) %>%
+  group_by(id, period, interval) %>%
+  mutate(rate_mean = mean(rate)) 
+
+# remain the distinct column of rate_mean
+hr_cleaned = hr_df %>%  
+  select(id, period, condition, interval, rate_mean) %>% distinct() %>%
+  group_by(id) %>%
+  mutate(diff = rate_mean - lag(rate_mean)) 
+
+## blood pressure
+load("data/bp_cleaned.RData")
+bp_df = bp_cleaned 
+bp_df = bp_df %>% ungroup()
+
+## map to 5 seconds intervals
+max(bp_df$pSec, na.rm = T)
+time_break = seq(0, 1243, 2)
+bp_df = bp_df %>% 
+  mutate(interval = cut(bp_df$pSec, breaks = time_break)) %>%
+  group_by(id, period, interval) %>%
+  mutate(pval_mean = mean(pVal)) 
+
+# remain the distinct column of rate_mean
+bp_cleaned = bp_df %>%  
+  select(id, period, condition, interval, pval_mean) %>% distinct() %>%
+  group_by(id) %>%
+  mutate(diff = pval_mean - lag(pval_mean)) 
+
+## respiratory
+load("data/rsp_cleaned.RData")
+rsp_df = rsp_cleaned 
+rsp_df = rsp_df %>% ungroup()
+
+## map to 5 seconds intervals
+max(rsp_df$time, na.rm = T)
+time_break = seq(0, 1662, 2)
+rsp_df = rsp_df %>% 
+  mutate(interval = cut(rsp_df$time, breaks = time_break)) %>%
+  group_by(id, period, interval) %>%
+  mutate(rate_mean = mean(rate)) 
+
+# remain the distinct column of rate_mean
+rsp_cleaned = rsp_df %>%  
+  select(id, period, condition, interval, rate_mean) %>% distinct() %>%
+  group_by(id) %>%
+  mutate(diff = rate_mean - lag(rate_mean))
+```
+
+## single patient process
+```{r}
+mi020_hr = hr_cleaned %>% filter(id == "mi020") %>% 
+  mutate(interval = as.numeric(interval)) 
+mi020_rsp = rsp_cleaned %>% filter(id == "mi020") %>% 
+  mutate(interval = as.numeric(interval))
+mi020_bp = bp_cleaned %>% filter(id == "mi020") %>% 
+  mutate(interval = as.numeric(interval))
+
+mi020 = left_join(mi020_rsp, mi020_hr, by = c("id", "period", "condition", "interval")) 
+mi020 = left_join(mi020, mi020_bp, by = c("id", "period", "condition", "interval")) %>%
+  mutate(hr_rate = `rate_mean.y`, rsp_rate = `rate_mean.x`) %>%
+  select(id, period, interval, hr_rate, rsp_rate, pval_mean)
+```
+
+#### period 1
+```{r}
+mi020_1 = mi020 %>% filter(period == 1) %>% drop_na()
+mi020_hr = ts(as.data.frame(mi020_1$hr_rate))
+mi020_rsp = ts(as.data.frame(mi020_1$rsp_rate))
+mi020_bp = ts(as.data.frame(mi020_1$pval_mean))
+
+ggplot(mi020_1, aes(x = interval, y = hr_rate)) +
+  geom_point(size = 0.2) +
+  geom_smooth(se = FALSE, size = 0.2) # rate plot
+ggplot(mi020_1, aes(x = interval, y = rsp_rate)) + 
+  geom_point(size = 0.2) +
+  geom_smooth(se = FALSE, size = 0.2) # rate plot
+
+a = autoplot(mi020_hr)
+b = autoplot(mi020_rsp)
+grid.arrange(a,b, nrow = 2)
+```
+
+#### check for stationary
+```{r}
+## using the residue to test stationary
+fit_trend_hr = loess(mi020_1$hr_rate ~ mi020_1$interval) # fit a polynomial smooth
+plot(fit_trend_hr$residuals)
+adf.test(fit_trend_hr$residuals)
+
+fit_trend_rsp = loess(mi020_1$rsp_rate ~ mi020_1$interval) # fit a polynomial smooth
+plot(fit_trend_rsp$residuals)
+adf.test(fit_trend_hr$residuals)
+
+## both stationary
+```
+
+#### compute transfer entropy
+```{r}
+mi020_hr
+
+TE = transfer_entropy(fit_trend_hr$residuals, fit_trend_rsp$residuals)
+TE2 = transfer_entropy(fit_trend_hr$residuals, fit_trend_rsp$residuals)
+# bin or quantile discretion
+
+TE$coef
+TE2$coef
+```
+
+#### period 2
+```{r}
+mi020_2 = mi020 %>% filter(period == 2) %>% drop_na()
+mi020_hr = ts(as.data.frame(mi020_2$hr_rate))
+mi020_rsp = ts(as.data.frame(mi020_2$rsp_rate))
+
+ggplot(mi020_2, aes(x = interval, y = hr_rate)) +
+  geom_point(size = 0.2) +
+  geom_smooth(se = FALSE, size = 0.2) # rate plot
+ggplot(mi020_2, aes(x = interval, y = rsp_rate)) + 
+  geom_point(size = 0.2) +
+  geom_smooth(se = FALSE, size = 0.2) # rate plot
+
+a = autoplot(mi020_hr)
+b = autoplot(mi020_rsp)
+grid.arrange(a,b, nrow = 2)
+```
+
+#### check for stationary
+```{r}
+## using the residue to test stationary
+fit_trend = loess(mi020_2$hr_rate ~ mi020_2$interval) # fit a polynomial smooth
+plot(fit_trend$residuals)
+adf.test(fit_trend$residuals)
+
+fit_trend = loess(mi020_2$rsp_rate ~ mi020_2$interval) # fit a polynomial smooth
+plot(fit_trend$residuals)
+adf.test(fit_trend$residuals)
+
+## both stationary
+```
+
+#### compute transfer entropy
+```{r}
+TE = transfer_entropy(mi020_2$hr_rate, mi020_2$rsp_rate, type = 'bins', bins = 25)
+TE2 = transfer_entropy(mi020_2$hr_rate, mi020_2$rsp_rate)
+# bin or quantile discretion
+
+TE2$coef
+```
+
+## For loop process - single period
+
+```{r}
+period1_hr = hr_cleaned %>% filter(period == 1) %>% select(id, interval, rate_mean)
+period1_rsp = rsp_cleaned %>% filter(period == 2) %>% select(id, interval, rate_mean)
+
+## replace missing with the up value or down value, drop missing values
+period1 = left_join(period1_hr, period1_rsp, by = c("id", "interval")) %>%
+  rename(rate_hr = rate_mean.x, rate_rsp = rate_mean.y) %>% fill(rate_hr, .direction = 'updown') %>% fill(rate_rsp, .direction = 'updown') %>%
+  drop_na() %>% mutate(interval = as.numeric(interval))
+
+unique(period1$id)
+sum_p1 = period1 %>% group_by(id) %>% summarize(num_obs = n()) %>%
+  mutate(pval_hr = NA, pval_rsp = NA, stationary_hr = NA, stationary_rsp = NA)
+    # number of observation for each patient
+```
+
+#### stationary test
+```{r}
+i = 1
+for (i in 1:nrow(sum_p1)) {
+  
+  n_obs = as.numeric(sum_p1[i,2])
+  cur = period1[i:(i+n_obs-1), ] 
+  fit_trend_hr = loess(cur$rate_hr ~ cur$interval)
+  fit_trend_rsp = loess(cur$rate_rsp ~ cur$interval)
+  
+  ## null hypothesis: non-stationary time series
+  res_hr = adf.test(fit_trend_hr$residuals)
+  p_val_hr = res_hr$p.value
+  res_rsp = adf.test(fit_trend_rsp$residuals)
+  p_val_rsp = res_rsp$p.value
+  
+  sum_p1$pval_hr[i] = p_val_hr
+  sum_p1$pval_rsp[i] = p_val_rsp
+  sum_p1$stationary_hr[i] = ifelse(p_val_hr < 0.05, "stationary", "non-stationary")
+  sum_p1$stationary_rsp[i] = ifelse(p_val_rsp < 0.05, "stationary", "non-stationary")
+  
+}
+
+## keep only the stationary subjects
+id_stationary = (sum_p1 %>% filter(stationary_hr == "stationary", stationary_rsp == "stationary"))$id
+```
+
+#### obtain transfer entropy
+```{r}
+period1_2 = period1 %>% filter(id %in% id_stationary)
+trans_res = sum_p1 %>% filter(id %in% id_stationary) %>% select(id, num_obs) %>% mutate(transfer_hr_rsp = NA, transfer_rsp_hr = NA)
+
+### Do we really need to use to residues???!!!
+for (i in 1:nrow(trans_res)) {
+  
+   cur_id = as.character(trans_res[i,1])
+   cur = period1_2 %>% filter(id == cur_id)
+   
+   TE = transfer_entropy(cur$rate_hr, cur$rate_rsp)
+   trans_res$transfer_hr_rsp[i] = TE$coef[1, 1]
+   trans_res$transfer_rsp_hr[i] = TE$coef[2, 1]
+}
+
+save(trans_res, file = "ET_p1.RData")
+load("ET_p1.RData")
+```
+
+
+
+
+
+
+

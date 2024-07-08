@@ -1,0 +1,59 @@
+---
+title: "Sensitivity Analysis Master Document"
+author: "Christine Lucille Kuryla"
+date: "2024-07-08"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+*** think about the TE results that have a large p value
+*** TE vs effective TE
+
+
+vignette: https://cran.r-project.org/web/packages/RTransferEntropy/vignettes/transfer-entropy.html 
+paper: https://www.sciencedirect.com/science/article/pii/S2352711019300779 
+reference manual: https://cran.r-project.org/web/packages/RTransferEntropy/RTransferEntropy.pdf 
+
+# Goals and Summary
+
+This project involves varying multiple parts of the TE pipeline, including:
+* Data processing
+  1. Order of data cleaning
+  2. Time interval of interpolation
+* Transfer Entropy calculations
+  1. Varying parameters
+  2. Differences vs non-differences
+
+We will do this by using functions and varying their order and parameters for ease of interpretation.
+
+We will then compare the results of the TE analysis for each potential combination.
+
+# Order of data cleaning
+
+Rmd: ""
+
+## Components
+
+
+
+## Orders
+
+
+
+
+
+
+```{r load_libraries}
+
+library(tidyverse)
+library(RTransferEntropy)
+
+```
+
+```{r load_data_and_process}
+
+```
+
