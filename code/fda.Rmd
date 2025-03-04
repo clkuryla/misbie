@@ -1,0 +1,107 @@
+---
+title: "FDA"
+author: "Christine Lucille Kuryla"
+date: "2025-03-04"
+output: html_document
+---
+
+
+https://chatgpt.com/share/67c712dc-e8f8-8002-b486-3450cd7ef5db 
+
+https://chatgpt.com/share/67c712fd-0bdc-8002-ad03-edf91e165a96
+
+https://chatgpt.com/share/67c71306-96f8-8002-816e-2ac8074076f8
+https://chatgpt.com/share/67c7130f-8a58-8002-abc9-2c7a85ce3cf0 
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(dplyr)
+library(tidyr)
+library(tidyverse)
+library(refund)
+library(fda)
+library(mgcv)
+library(here)
+
+```
+
+```{r}
+
+hr_raw <- read_csv(here("data/raw_data_110_202404/hr_raw_108.csv"))
+
+hr_data <- hr_raw %>% 
+  filter(period == "ST") %>% 
+  filter(condition != "MELAS") %>% 
+  mutate(group = condition,
+         beat_time = rttimes.pSec) %>% 
+#  select(id, beat_time, group) %>% 
+  arrange(id, beat_time) %>%
+  group_by(id) %>%
+  mutate(RR = beat_time - lag(beat_time),
+         HR_instant = 60 / RR) %>%
+  filter(!is.na(HR_instant))
+
+# Define a common time grid (e.g., 0.5s intervals over 5 minutes)
+common_time <- seq(0, 300, by = 0.5)
+
+# Interpolate HR onto the common time grid
+hr_interpolated <- hr_data %>%
+  group_by(id, group) %>%
+  summarise(
+    HR_interp = list(approx(x = beat_time, y = HR_instant, xout = common_time, 
+                             rule = 2, method = "linear")$y)
+  )
+
+# Convert to a matrix (rows = time, cols = subjects)
+HR_matrix <- do.call(cbind, hr_interpolated$HR_interp)
+rownames(HR_matrix) <- common_time  
+
+```
+
+```{r}
+
+library(fda)
+
+
+# # Define B-spline basis for smoothing
+# nbasis <- 25   # Choose based on the time window (5 min)
+# basis <- create.bspline.basis(rangeval = c(0, 300), nbasis = nbasis, norder = 4)  
+# 
+# # Smooth HR matrix using pffr (automatic selection of penalty)
+# HR_fd <- fpca.sc(Y = HR_matrix, npc = 5)  # Functional PCA to extract smooth curves
+
+
+# Create B-spline basis for 5-minute interval [0,300] seconds
+range <- c(0, 300)
+nbasis <- 25                      # e.g. 25 basis functions for flexibility
+basis <- create.bspline.basis(rangeval = range, nbasis = nbasis, norder = 4)  # cubic B-splines
+
+# Set up functional parameter object with 2nd derivative penalty (Lfdobj=2)
+lambda <- 1e-6    # initial smoothing parameter (tune via GCV in practice)
+fdParObj <- fdPar(basisobj = basis, Lfdobj = 2, lambda = lambda)
+
+# Smooth the HR data for all subjects (HR_matrix has one column per subject)
+HR_fd <- smooth.basis(argvals = common_time, y = HR_matrix, fdParobj = fdParObj)$fd
+
+fdParObj <- fdPar(basis, 2, lambda)
+
+
+```
+
+```{r}
+
+# Create data frame with subject-level predictors
+subject_info <- data.frame(id = hr_interpolated$id, group = hr_interpolated$group)
+
+# Ensure subject order matches HR_fd
+subject_info <- subject_info[order(subject_info$id),]
+
+# Fit the function-on-scalar regression model
+hr_model <- pffr(HR_fd ~ group, data = subject_info)
+summary(hr_model)
+
+
+
+```
+
